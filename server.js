@@ -27,7 +27,8 @@ const CHAINS = {
  */
 async function fetchApprovals({ chainId, address, kind }) {
   const endpoint = kind === 'nft' ? 'nft721_approval_security' : 'token_approval_security';
-  const url = `${GOPLUS_BASE}/${endpoint}/${chainId}?addresses=${address}`;
+  const normalizedAddress = address.toLowerCase();
+  const url = `${GOPLUS_BASE}/${endpoint}/${chainId}?addresses=${normalizedAddress}`;
 
   const headers = {};
   if (process.env.GOPLUS_ACCESS_TOKEN) {
