@@ -39,8 +39,12 @@ async function fetchApprovals({ chainId, address, kind }) {
     throw new Error(`GoPlus API error: ${res.status} ${res.statusText}`);
   }
   const json = await res.json();
-  if (json.code !== 1) {
+  // code 1 = full success, code 2 = partial data obtained (still usable)
+  if (json.code !== 1 && json.code !== 2) {
     throw new Error(`GoPlus API returned code ${json.code}: ${json.message || 'unknown error'}`);
+  }
+  if (!json.result || Object.keys(json.result).length === 0) {
+    throw new Error('GoPlus returned no approval data for this address — it may have no on-chain approvals yet.');
   }
   return json.result;
 }
