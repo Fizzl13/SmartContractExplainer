@@ -36,15 +36,29 @@ async function fetchApprovals({ chainId, address, kind }) {
   }
 
   const res = await fetch(url, { headers });
+  const rawText = await res.text();
+  console.log('--- GoPlus raw response ---');
+  console.log('URL:', url);
+  console.log('HTTP status:', res.status);
+  console.log('Body:', rawText);
+  console.log('---------------------------');
+
   if (!res.ok) {
     throw new Error(`GoPlus API error: ${res.status} ${res.statusText}`);
   }
-  const json = await res.json();
+
+  let json;
+  try {
+    json = JSON.parse(rawText);
+  } catch (e) {
+    throw new Error('GoPlus returned a non-JSON response — check server logs.');
+  }
+
   // code 1 = full success, code 2 = partial data obtained (still usable)
   if (json.code !== 1 && json.code !== 2) {
     throw new Error(`GoPlus API returned code ${json.code}: ${json.message || 'unknown error'}`);
   }
-  if (!json.result || Object.keys(json.result).length === 0) {
+  if (!json.result || (Array.isArray(json.result) && json.result.length === 0) || (!Array.isArray(json.result) && Object.keys(json.result).length === 0)) {
     throw new Error('GoPlus returned no approval data for this address — it may have no on-chain approvals yet.');
   }
   return json.result;
@@ -127,6 +141,26 @@ app.post('/api/explain', async (req, res) => {
     res.json({ verdict, explanation });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Temporary debug helper — visit directly in the browser to see the raw GoPlus response.
+// Remove this route before sharing the app publicly.
+app.get('/api/debug-approvals', async (req, res) => {
+  try {
+    const { address, chain = 'ethereum', kind = 'token' } = req.query;
+    if (!address) return res.status(400).json({ error: 'pass ?address=0x...' });
+    const chainId = CHAINS[chain] || chain;
+    const endpoint = kind === 'nft' ? 'nft721_approval_security' : 'token_approval_security';
+    const url = `${GOPLUS_BASE}/${endpoint}/${chainId}?addresses=${address.toLowerCase()}`;
+    const headers = {};
+    if (process.env.GOPLUS_ACCESS_TOKEN) headers['access_token'] = process.env.GOPLUS_ACCESS_TOKEN;
+
+    const gpRes = await fetch(url, { headers });
+    const text = await gpRes.text();
+    res.type('json').send(text);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
