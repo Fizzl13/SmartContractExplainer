@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlainText — know what you're signing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f4efe6; --ink: #1c1a17; --ink-soft: #6b6459; --line: #d8d0c2;
+    --panel: #ffffff; --accent: #2f4b3c; --accent-soft: #e4ebe4;
+    --mono-bg: #211f1c; --mono-text: #e8e2d4;
+    --safe: #2f6b3f; --safe-bg: #e5f0e3;
+    --warn: #96631a; --warn-bg: #faf0dc;
+    --danger: #a13a2f; --danger-bg: #fbe6e1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17150f; --ink: #ece6d8; --ink-soft: #a89f8d; --line: #3a352b;
+      --panel: #211e17; --accent: #93c4a4; --accent-soft: #22301f;
+      --mono-bg: #0d0c09; --mono-text: #dcd4c0;
+      --safe: #7fbf8f; --safe-bg: #1e2e1f;
+      --warn: #d9a54a; --warn-bg: #332711;
+      --danger: #e08575; --danger-bg: #331d18;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Inter', -apple-system, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 48px 20px 80px; }
+  header { margin-bottom: 36px; }
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink-soft); letter-spacing: 0.02em; margin-bottom: 14px; }
+  h1 { font-family: 'Fraunces', serif; font-weight: 500; font-size: clamp(28px, 6vw, 40px); line-height: 1.12; margin: 0 0 16px; letter-spacing: -0.01em; }
+  header p { color: var(--ink-soft); font-size: 15.5px; max-width: 54ch; margin: 0; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+  .tab { font-family: 'Inter', sans-serif; font-size: 13.5px; font-weight: 500; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-soft); cursor: pointer; }
+  .tab.active { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .section-label { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); margin: 0 0 12px; }
+
+  .field-row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  input[type=text], select {
+    font-family: 'IBM Plex Mono', monospace; font-size: 13.5px;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 11px 14px;
+  }
+  input[type=text] { flex: 1; min-width: 220px; }
+  .check-btn, .translate-btn {
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px;
+    background: var(--accent); color: var(--paper); border: none;
+    border-radius: 999px; padding: 11px 22px; cursor: pointer;
+  }
+  .check-btn:disabled, .translate-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .scenarios { display: grid; gap: 10px; margin-bottom: 24px; }
+  .scenario-btn {
+    text-align: left; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; cursor: pointer; color: var(--ink);
+    font-family: 'Inter', sans-serif; font-size: 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .scenario-btn:hover { border-color: var(--accent); }
+  .scenario-btn.active { border-color: var(--accent); background: var(--accent-soft); }
+  .scenario-btn .name { font-weight: 500; }
+  .scenario-btn .sub { color: var(--ink-soft); font-size: 12.5px; display: block; margin-top: 2px; }
+
+  .stage { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); margin-top: 16px; }
+  .raw { background: var(--mono-bg); color: var(--mono-text); font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 16px 18px; white-space: pre-wrap; word-break: break-word; overflow-x: auto; max-height: 220px; overflow-y: auto; }
+  .translate-row { padding: 14px 18px; display: flex; justify-content: center; background: var(--panel); }
+  .result { padding: 20px 18px 22px; border-top: 1px solid var(--line); display: none; }
+  .result.visible { display: block; }
+  .verdict { display: inline-flex; align-items: center; gap: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: 999px; margin-bottom: 14px; }
+  .verdict.safe { background: var(--safe-bg); color: var(--safe); }
+  .verdict.caution { background: var(--warn-bg); color: var(--warn); }
+  .verdict.risk { background: var(--danger-bg); color: var(--danger); }
+  .verdict .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .plain-text { font-family: 'Fraunces', serif; font-size: 17px; line-height: 1.55; white-space: pre-wrap; }
+
+  .error-box { background: var(--danger-bg); color: var(--danger); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; margin-top: 12px; display: none; }
+
+  footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 12.5px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">plaintext-wallet · self-hosted</div>
+    <h1>Before you sign,<br>know what you're signing.</h1>
+    <p>Check a real wallet's approvals, or try a sample scenario — either way, get a plain-language explanation of what each permission actually does.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="wallet">Check a wallet</button>
+    <button class="tab" data-tab="demo">Try a sample</button>
+  </div>
+
+  <div class="panel active" id="panel-wallet">
+    <div class="section-label">Wallet address</div>
+    <div class="field-row">
+      <input type="text" id="walletAddress" placeholder="0x...">
+      <select id="chainSelect">
+        <option value="ethereum">Ethereum</option>
+        <option value="bsc">BNB Chain</option>
+        <option value="polygon">Polygon</option>
+        <option value="arbitrum">Arbitrum</option>
+        <option value="optimism">Optimism</option>
+        <option value="base">Base</option>
+        <option value="avalanche">Avalanche</option>
+      </select>
+      <select id="kindSelect">
+        <option value="token">Token approvals</option>
+        <option value="nft">NFT approvals</option>
+      </select>
+    </div>
+    <button class="check-btn" id="checkWalletBtn">Check approvals →</button>
+    <div class="error-box" id="walletError"></div>
+    <div class="stage" id="walletStage" style="display:none;">
+      <div class="raw" id="walletRaw"></div>
+      <div class="result visible" id="walletResult">
+        <div class="verdict" id="walletVerdict"><span class="dot"></span><span></span></div>
+        <div class="plain-text" id="walletPlainText"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-demo">
+    <div class="section-label">Choose an example</div>
+    <div class="scenarios" id="scenarios"></div>
+    <div class="stage" id="demoStage" style="display:none;">
+      <div class="raw" id="demoRaw"></div>
+      <div class="translate-row">
+        <button class="translate-btn" id="translateBtn">Explain in plain English →</button>
+      </div>
+      <div class="result" id="demoResult">
+        <div class="verdict" id="demoVerdict"><span class="dot"></span><span></span></div>
+        <div class="plain-text" id="demoPlainText"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <strong>Self-hosted instance.</strong> Wallet checks call the GoPlus Security API for live approval data, then Claude for the plain-language translation. Nothing is stored — each check is stateless.
+  </footer>
+</div>
+
+<script>
+// ---- Tabs ----
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  };
+});
+
+// ---- Wallet check ----
+const checkWalletBtn = document.getElementById('checkWalletBtn');
+const walletError = document.getElementById('walletError');
+const walletStage = document.getElementById('walletStage');
+const walletRaw = document.getElementById('walletRaw');
+const walletVerdict = document.getElementById('walletVerdict');
+const walletPlainText = document.getElementById('walletPlainText');
+
+checkWalletBtn.onclick = async () => {
+  const address = document.getElementById('walletAddress').value.trim();
+  const chain = document.getElementById('chainSelect').value;
+  const kind = document.getElementById('kindSelect').value;
+  walletError.style.display = 'none';
+
+  if (!address) {
+    walletError.textContent = 'Enter a wallet address first.';
+    walletError.style.display = 'block';
+    return;
+  }
+
+  checkWalletBtn.disabled = true;
+  checkWalletBtn.textContent = 'Checking...';
+  walletStage.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/check-wallet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, chain, kind })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+
+    walletRaw.textContent = JSON.stringify(data.raw, null, 2);
+    renderVerdict(walletVerdict, data.verdict);
+    walletPlainText.textContent = data.explanation;
+    walletStage.style.display = 'block';
+  } catch (err) {
+    walletError.textContent = err.message;
+    walletError.style.display = 'block';
+  } finally {
+    checkWalletBtn.disabled = false;
+    checkWalletBtn.textContent = 'Check approvals →';
+  }
+};
+
+function renderVerdict(el, verdict) {
+  const map = {
+    SAFE: ['safe', 'likely safe'],
+    CAUTION: ['caution', 'use caution'],
+    RISK: ['risk', 'risky']
+  };
+  const [cls, label] = map[verdict] || ['caution', 'use caution'];
+  el.className = 'verdict ' + cls;
+  el.querySelector('span:last-child').textContent = label;
+}
+
+// ---- Demo scenarios ----
+const scenarios = [
+  { name: 'Unlimited approval, unknown party', sub: 'USDC · approve()', data: { function: "approve", token: "USDC", spender: "0x7a3f...92e1", spender_verified: false, approved_amount: "unlimited", duration: "until manually revoked", spender_age_days: 4 } },
+  { name: 'Release all NFTs to a marketplace', sub: 'BoredApeYC · setApprovalForAll()', data: { function: "setApprovalForAll", collection: "BoredApeYachtClub", operator: "0x1e0049...marketplace", operator_verified: true, operator_label: "OpenSea Seaport 1.6", approved: "all tokens", duration: "until manually revoked" } },
+  { name: 'Limited approval to a known DEX', sub: 'ETH · permit2 · Uniswap', data: { function: "permit2", token: "ETH (wrapped)", spender: "Uniswap Universal Router", spender_verified: true, approved_amount: "0.5 ETH", duration: "expires in 30 minutes" } }
+];
+
+const scenariosEl = document.getElementById('scenarios');
+const demoStage = document.getElementById('demoStage');
+const demoRaw = document.getElementById('demoRaw');
+const translateBtn = document.getElementById('translateBtn');
+const demoResult = document.getElementById('demoResult');
+const demoVerdict = document.getElementById('demoVerdict');
+const demoPlainText = document.getElementById('demoPlainText');
+let activeScenario = null;
+
+scenarios.forEach(s => {
+  const btn = document.createElement('button');
+  btn.className = 'scenario-btn';
+  btn.innerHTML = `<span><span class="name">${s.name}</span><span class="sub">${s.sub}</span></span>`;
+  btn.onclick = () => {
+    document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeScenario = s.data;
+    demoRaw.textContent = JSON.stringify(s.data, null, 2);
+    demoStage.style.display = 'block';
+    demoResult.classList.remove('visible');
+    translateBtn.disabled = false;
+    translateBtn.textContent = 'Explain in plain English →';
+  };
+  scenariosEl.appendChild(btn);
+});
+
+translateBtn.onclick = async () => {
+  if (!activeScenario) return;
+  translateBtn.disabled = true;
+  translateBtn.textContent = 'Working...';
+  demoResult.classList.add('visible');
+  demoPlainText.textContent = '';
+
+  try {
+    const res = await fetch('/api/explain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: activeScenario })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+
+    renderVerdict(demoVerdict, data.verdict);
+    demoPlainText.textContent = data.explanation;
+    translateBtn.textContent = 'Explain again →';
+  } catch (err) {
+    demoPlainText.textContent = err.message;
+  } finally {
+    translateBtn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>

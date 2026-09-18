@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: plaintext-wallet
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOPLUS_ACCESS_TOKEN
+        sync: false
