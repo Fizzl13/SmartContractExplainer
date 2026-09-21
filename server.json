@@ -1,0 +1,13 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Fizzl13/plaintext-wallet-checker",
+  "title": "PlainText Wallet Approval Checker",
+  "description": "Checks an EVM wallet's live token/NFT approvals via GoPlus Security and explains them in plain language for people with no crypto background. Free tools: check_wallet_approvals, explain_approval.",
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://smartcontractexplainer.onrender.com/mcp"
+    }
+  ]
+}
