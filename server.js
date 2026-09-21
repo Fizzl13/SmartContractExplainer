@@ -5,9 +5,15 @@ const { paymentMiddleware } = require('@x402/express');
 const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
 const { ExactEvmScheme } = require('@x402/evm/exact/server');
 const { createFacilitatorConfig } = require('@coinbase/x402');
+const { McpServer, createMcpHandler } = require('@modelcontextprotocol/server');
+const { z } = require('zod/v4');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Render sits behind a proxy; without this, req.ip is Render's internal
+// address for every request, which would break per-caller MCP rate limiting.
+app.set('trust proxy', true);
 
 app.use(express.json());
 
@@ -187,27 +193,31 @@ Start your answer with exactly one of these three words followed by a colon: "SA
   return { verdict: 'CAUTION', explanation: text };
 }
 
+// Shared by the paid HTTP route and the free MCP tool below.
+async function getWalletVerdict({ address, chain = 'ethereum', kind = 'token' }) {
+  const chainId = CHAINS[chain] || chain; // allow raw chain id too
+  const approvalData = await fetchApprovals({ chainId, address, kind });
+
+  if (Array.isArray(approvalData) && approvalData.length === 0) {
+    return {
+      verdict: 'SAFE',
+      explanation: 'This wallet has no active token or NFT approvals on this chain right now — there is nothing a third party can currently move on your behalf.',
+      raw: approvalData
+    };
+  }
+
+  const { verdict, explanation } = await translateWithClaude(approvalData);
+  return { verdict, explanation, raw: approvalData };
+}
+
 // Look up and explain real approvals for a wallet address
 app.post('/api/check-wallet', async (req, res) => {
   try {
     const { address, chain = 'ethereum', kind = 'token' } = req.body;
     if (!address) return res.status(400).json({ error: 'address is required' });
 
-    const chainId = CHAINS[chain] || chain; // allow raw chain id too
-    const approvalData = await fetchApprovals({ chainId, address, kind });
-
-    if (Array.isArray(approvalData) && approvalData.length === 0) {
-      res.json({
-        verdict: 'SAFE',
-        explanation: 'This wallet has no active token or NFT approvals on this chain right now — there is nothing a third party can currently move on your behalf.',
-        raw: approvalData
-      });
-      return;
-    }
-
-    const { verdict, explanation } = await translateWithClaude(approvalData);
-
-    res.json({ verdict, explanation, raw: approvalData });
+    const result = await getWalletVerdict({ address, chain, kind });
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -261,6 +271,109 @@ app.post('/api/demo-explain', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// --- Free MCP tools, rate-limited (see /api/check-wallet and /api/explain
+// above for the paid HTTP equivalents) ---
+
+function buildMcpServer() {
+  const server = new McpServer({ name: 'plaintext-wallet-checker', version: '1.0.0' });
+
+  server.registerTool(
+    'check_wallet_approvals',
+    {
+      title: 'Check Wallet Approvals',
+      description: "Check an EVM wallet's live token/NFT approvals via GoPlus Security and get a plain-language safety verdict (SAFE, CAUTION, or RISK) with an explanation.",
+      inputSchema: z.object({
+        address: z.string().regex(ADDRESS_RE).describe('EVM wallet address to check, e.g. 0x...'),
+        chain: z.enum(Object.keys(CHAINS)).optional().describe('Chain to check approvals on (default: ethereum)'),
+        kind: z.enum(['token', 'nft']).optional().describe('Approval type to check (default: token)')
+      })
+    },
+    async ({ address, chain, kind }) => {
+      try {
+        const result = await getWalletVerdict({ address, chain, kind });
+        return { content: [{ type: 'text', text: `${result.verdict}: ${result.explanation}` }] };
+      } catch (err) {
+        return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    'explain_approval',
+    {
+      title: 'Explain Approval Payload',
+      description: "Explain an arbitrary approval/permission JSON payload in plain language, when you already have the data instead of needing an on-chain lookup.",
+      inputSchema: z.object({
+        data: z.record(z.string(), z.any()).describe('Arbitrary approval/permission JSON payload to explain')
+      })
+    },
+    async ({ data }) => {
+      try {
+        const { verdict, explanation } = await translateWithClaude(data);
+        return { content: [{ type: 'text', text: `${verdict}: ${explanation}` }] };
+      } catch (err) {
+        return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  return server;
+}
+
+// Simple in-memory per-IP rate limit — this endpoint is free, unlike the
+// paid HTTP routes above, so it needs a cap on API cost exposure. Fine for a
+// single-instance deployment; would need a shared store across replicas.
+const MCP_RATE_LIMIT = 20;
+const MCP_RATE_WINDOW_MS = 60 * 60 * 1000;
+const mcpRateLimits = new Map();
+
+function checkMcpRateLimit(ip) {
+  const now = Date.now();
+  const entry = mcpRateLimits.get(ip);
+  if (!entry || now > entry.resetAt) {
+    mcpRateLimits.set(ip, { count: 1, resetAt: now + MCP_RATE_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= MCP_RATE_LIMIT) return false;
+  entry.count += 1;
+  return true;
+}
+
+const mcpHandler = createMcpHandler(buildMcpServer, { responseMode: 'json' });
+
+app.all('/mcp', async (req, res) => {
+  if (!checkMcpRateLimit(req.ip)) {
+    return res.status(429).json({ error: 'Rate limit exceeded — try again later.' });
+  }
+
+  try {
+    const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (Array.isArray(value)) value.forEach((v) => headers.append(key, v));
+      else if (value !== undefined) headers.set(key, value);
+    }
+
+    const init = { method: req.method, headers };
+    if (!['GET', 'HEAD'].includes(req.method) && req.body && Object.keys(req.body).length) {
+      init.body = JSON.stringify(req.body);
+    }
+
+    const webResponse = await mcpHandler.fetch(new Request(url, init));
+
+    res.status(webResponse.status);
+    webResponse.headers.forEach((value, key) => {
+      if (!['content-length', 'content-encoding'].includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
+    });
+    res.send(Buffer.from(await webResponse.arrayBuffer()));
+  } catch (err) {
+    console.error('[mcp] error:', err);
+    res.status(500).json({ error: 'MCP handler error' });
   }
 });
 
