@@ -1,38 +1,45 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const { paymentMiddleware } = require('x402-express');
+const { paymentMiddleware } = require('@x402/express');
+const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
+const { ExactEvmScheme } = require('@x402/evm/exact/server');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// x402 v2 identifies networks by CAIP-2 chain id rather than a network name.
+const CAIP2_NETWORKS = {
+  base: 'eip155:8453',
+  'base-sepolia': 'eip155:84532'
+};
+
 const x402PayTo = process.env.X402_PAY_TO;
 if (x402PayTo) {
   const x402Network = process.env.X402_NETWORK || 'base-sepolia';
+  const x402Caip2Network = CAIP2_NETWORKS[x402Network] || x402Network;
   const x402CheckPrice = process.env.X402_CHECK_PRICE || '$0.10';
   const x402ExplainPrice = process.env.X402_EXPLAIN_PRICE || '$0.05';
   const x402FacilitatorUrl = process.env.X402_FACILITATOR_URL || 'https://x402.org/facilitator';
 
-  app.use(paymentMiddleware(x402PayTo, {
-    '/api/check-wallet': {
-      price: x402CheckPrice,
-      network: x402Network,
-      config: {
-        description: 'Explain wallet token approvals in plain language'
-      }
+  const facilitatorClient = new HTTPFacilitatorClient({ url: x402FacilitatorUrl });
+  const x402Server = new x402ResourceServer(facilitatorClient);
+  x402Server.register('eip155:*', new ExactEvmScheme());
+
+  app.use(paymentMiddleware({
+    'POST /api/check-wallet': {
+      accepts: [{ scheme: 'exact', price: x402CheckPrice, network: x402Caip2Network, payTo: x402PayTo }],
+      description: 'Explain wallet token approvals in plain language',
+      mimeType: 'application/json'
     },
-    '/api/explain': {
-      price: x402ExplainPrice,
-      network: x402Network,
-      config: {
-        description: 'Explain a pasted approval payload in plain language'
-      }
+    'POST /api/explain': {
+      accepts: [{ scheme: 'exact', price: x402ExplainPrice, network: x402Caip2Network, payTo: x402PayTo }],
+      description: 'Explain a pasted approval payload in plain language',
+      mimeType: 'application/json'
     }
-  }, {
-    url: x402FacilitatorUrl
-  }));
+  }, x402Server));
 
   console.log(`x402 paywall enabled for /api/check-wallet and /api/explain using facilitator ${x402FacilitatorUrl}`);
 } else {

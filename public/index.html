@@ -192,7 +192,7 @@
       <button type="button" class="modal-close-btn" id="closePayModalBtn">Close</button>
     </div>
     <div class="modal-body">
-      This check costs <strong>$0.10</strong> on Base Sepolia. Connect a wallet, approve the x402 payment, and we’ll explain the wallet approvals in plain language.
+      This check costs <strong>$0.10</strong> in USDC on Base. Connect a wallet, approve the x402 payment, and we’ll explain the wallet approvals in plain language.
     </div>
     <div class="modal-actions">
       <button type="button" class="pay-now-btn" id="payNowBtn">Pay $0.10</button>
@@ -253,7 +253,7 @@ async function connectWallet() {
       return;
     }
     connectedWallet = account;
-    setWalletStatus(`Wallet connected: ${account.slice(0, 6)}...${account.slice(-4)} • Base Sepolia ready`);
+    setWalletStatus(`Wallet connected: ${account.slice(0, 6)}...${account.slice(-4)} • Base ready`);
     closePayModal();
   } catch (err) {
     setWalletStatus('Wallet connection was cancelled or blocked by the browser.');
@@ -275,19 +275,14 @@ payNowBtn.onclick = async () => {
 };
 
 async function loadX402Libraries() {
-  const [{ createWalletClient, custom }, { baseSepolia }, x402] = await Promise.all([
+  const [{ createWalletClient, custom }, { base }, { wrapFetchWithPayment, x402Client }, { ExactEvmScheme }] = await Promise.all([
     import('https://esm.sh/viem@2.31.7'),
     import('https://esm.sh/viem@2.31.7/chains'),
-    import('https://esm.sh/x402@1.2.0')
+    import('https://esm.sh/@x402/fetch@2.26.0'),
+    import('https://esm.sh/@x402/evm@2.26.0')
   ]);
 
-  return {
-    createWalletClient,
-    custom,
-    baseSepolia,
-    createPaymentHeader: x402.createPaymentHeader,
-    selectPaymentRequirements: x402.selectPaymentRequirements
-  };
+  return { createWalletClient, custom, base, wrapFetchWithPayment, x402Client, ExactEvmScheme };
 }
 
 async function ensureX402Wallet(x402Libs) {
@@ -295,7 +290,7 @@ async function ensureX402Wallet(x402Libs) {
     throw new Error('No browser wallet detected. Please install MetaMask or another EVM wallet and reload the page.');
   }
 
-  const { createWalletClient, custom, baseSepolia } = x402Libs;
+  const { createWalletClient, custom, base } = x402Libs;
   const provider = window.ethereum;
   const accounts = await provider.request({ method: 'eth_requestAccounts' });
   const account = accounts && accounts[0];
@@ -303,15 +298,15 @@ async function ensureX402Wallet(x402Libs) {
     throw new Error('No wallet account selected. Please connect your wallet and try again.');
   }
 
-  const chainId = `0x${baseSepolia.id.toString(16)}`;
-  const addBaseSepolia = () => provider.request({
+  const chainId = `0x${base.id.toString(16)}`;
+  const addBase = () => provider.request({
     method: 'wallet_addEthereumChain',
     params: [{
       chainId,
-      chainName: 'Base Sepolia',
+      chainName: 'Base',
       nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-      rpcUrls: ['https://sepolia.base.org'],
-      blockExplorerUrls: ['https://sepolia-explorer.base.org']
+      rpcUrls: ['https://mainnet.base.org'],
+      blockExplorerUrls: ['https://basescan.org']
     }]
   });
 
@@ -328,7 +323,7 @@ async function ensureX402Wallet(x402Libs) {
       switchMessage.includes('unknown chain')
     );
     if (chainIsUnknown) {
-      await addBaseSepolia();
+      await addBase();
       await provider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId }]
@@ -340,48 +335,41 @@ async function ensureX402Wallet(x402Libs) {
 
   const walletClient = createWalletClient({
     account,
-    chain: baseSepolia,
+    chain: base,
     transport: custom(provider)
   });
 
-  return { provider, account, walletClient, baseSepolia };
+  return { provider, account, walletClient, base };
 }
 
 async function payForRequest(url, body, fallbackErrorMessage) {
-  const res = await fetch(url, {
+  const x402Libs = await loadX402Libraries();
+  const { wrapFetchWithPayment, x402Client, ExactEvmScheme } = x402Libs;
+  const { walletClient } = await ensureX402Wallet(x402Libs);
+
+  // ClientEvmSigner shape expected by @x402/evm: { address, signTypedData(message) }.
+  // The injected wallet already has an account bound, so signTypedData needs no extra args.
+  const signer = {
+    address: walletClient.account.address,
+    signTypedData: (typedData) => walletClient.signTypedData(typedData)
+  };
+
+  const client = new x402Client();
+  client.register('eip155:*', new ExactEvmScheme(signer));
+  const fetchWithPay = wrapFetchWithPayment(fetch, client);
+
+  const res = await fetchWithPay(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
 
-  if (res.status !== 402) {
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || fallbackErrorMessage);
-    return data;
-  }
-
-  const { accepts, x402Version } = await res.json();
-  const x402 = await loadX402Libraries();
-  const requirement = x402.selectPaymentRequirements(accepts, 'base-sepolia', 'exact');
-
-  const { walletClient } = await ensureX402Wallet(x402);
-  const paymentHeader = await x402.createPaymentHeader(walletClient, x402Version || 1, requirement);
-
-  const paidRes = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-PAYMENT': paymentHeader
-    },
-    body: JSON.stringify(body)
-  });
-
-  const paidData = await paidRes.json().catch(() => ({}));
-  if (!paidRes.ok) {
-    const detail = paidData.error || paidData.message;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = data.error || data.message;
     throw new Error(detail ? `${fallbackErrorMessage} (${detail})` : fallbackErrorMessage);
   }
-  return paidData;
+  return data;
 }
 
 async function performWalletCheck() {
