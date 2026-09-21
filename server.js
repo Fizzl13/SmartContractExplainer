@@ -89,22 +89,25 @@ async function fetchApprovals({ chainId, address, kind }) {
   }
 
   if (!res.ok) {
-    throw new Error(`GoPlus API error: ${res.status} ${res.statusText}`);
+    throw Object.assign(new Error(`GoPlus API error: ${res.status} ${res.statusText}`), { statusCode: 502 });
   }
 
   let json;
   try {
     json = JSON.parse(rawText);
   } catch (e) {
-    throw new Error('GoPlus returned a non-JSON response — check server logs.');
+    throw Object.assign(new Error('GoPlus returned a non-JSON response — check server logs.'), { statusCode: 502 });
   }
 
   // code 1 = full success, code 2 = partial data obtained (still usable)
   if (json.code !== 1 && json.code !== 2) {
-    throw new Error(`GoPlus API returned code ${json.code}: ${json.message || 'unknown error'}`);
+    throw Object.assign(new Error(`GoPlus API returned code ${json.code}: ${json.message || 'unknown error'}`), { statusCode: 502 });
   }
+  // No result / empty result means the wallet simply has no on-chain approvals —
+  // that's the best possible outcome, not a failure, so return an empty result
+  // instead of throwing.
   if (!json.result || (Array.isArray(json.result) && json.result.length === 0) || (!Array.isArray(json.result) && Object.keys(json.result).length === 0)) {
-    throw new Error('GoPlus returned no approval data for this address — it may have no on-chain approvals yet.');
+    return [];
   }
   return json.result;
 }
@@ -167,6 +170,16 @@ app.post('/api/check-wallet', async (req, res) => {
 
     const chainId = CHAINS[chain] || chain; // allow raw chain id too
     const approvalData = await fetchApprovals({ chainId, address, kind });
+
+    if (Array.isArray(approvalData) && approvalData.length === 0) {
+      res.json({
+        verdict: 'SAFE',
+        explanation: 'This wallet has no active token or NFT approvals on this chain right now — there is nothing a third party can currently move on your behalf.',
+        raw: approvalData
+      });
+      return;
+    }
+
     const { verdict, explanation } = await translateWithClaude(approvalData);
 
     res.json({ verdict, explanation, raw: approvalData });

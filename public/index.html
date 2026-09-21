@@ -50,12 +50,42 @@
     border-radius: 8px; padding: 11px 14px;
   }
   input[type=text] { flex: 1; min-width: 220px; }
-  .check-btn, .translate-btn {
+  .wallet-meta {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 10px 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  }
+  .wallet-status {
+    color: var(--ink-soft); font-size: 12.5px; line-height: 1.45; flex: 1;
+  }
+  .connect-wallet-btn, .disconnect-wallet-btn, .pay-now-btn, .modal-close-btn {
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12.5px;
+    border-radius: 999px; padding: 8px 14px; cursor: pointer;
+  }
+  .connect-wallet-btn, .disconnect-wallet-btn {
+    background: var(--accent-soft); color: var(--accent); border: 1px solid var(--line);
+  }
+  .disconnect-wallet-btn {
+    background: transparent; color: var(--ink-soft);
+  }
+  .check-btn, .translate-btn, .pay-now-btn {
     font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px;
     background: var(--accent); color: var(--paper); border: none;
     border-radius: 999px; padding: 11px 22px; cursor: pointer;
   }
-  .check-btn:disabled, .translate-btn:disabled { opacity: 0.5; cursor: default; }
+  .pay-now-btn { width: 100%; }
+  .check-btn:disabled, .translate-btn:disabled, .pay-now-btn:disabled { opacity: 0.5; cursor: default; }
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(18, 15, 11, 0.52); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100;
+  }
+  .modal-backdrop.visible { display: flex; }
+  .modal-card {
+    width: min(480px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.18); padding: 20px;
+  }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .modal-title { font-family: 'Fraunces', serif; font-size: 26px; margin: 0; }
+  .modal-close-btn { background: transparent; border: 1px solid var(--line); color: var(--ink-soft); }
+  .modal-body { color: var(--ink-soft); line-height: 1.6; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 
   .scenarios { display: grid; gap: 10px; margin-bottom: 24px; }
   .scenario-btn {
@@ -117,6 +147,13 @@
         <option value="nft">NFT approvals</option>
       </select>
     </div>
+    <div class="wallet-meta">
+      <div class="wallet-status" id="walletStatus">No wallet connected yet. Connect a wallet to pay for the check.</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="connect-wallet-btn" id="connectWalletBtn" type="button">Connect wallet</button>
+        <button class="disconnect-wallet-btn" id="disconnectWalletBtn" type="button">Disconnect</button>
+      </div>
+    </div>
     <button class="check-btn" id="checkWalletBtn">Check approvals →</button>
     <div class="error-box" id="walletError"></div>
     <div class="stage" id="walletStage" style="display:none;">
@@ -148,6 +185,21 @@
   </footer>
 </div>
 
+<div class="modal-backdrop" id="payModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 class="modal-title">Pay & explain</h2>
+      <button type="button" class="modal-close-btn" id="closePayModalBtn">Close</button>
+    </div>
+    <div class="modal-body">
+      This check costs <strong>$0.10</strong> on Base Sepolia. Connect a wallet, approve the x402 payment, and we’ll explain the wallet approvals in plain language.
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="pay-now-btn" id="payNowBtn">Pay $0.10</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ---- Tabs ----
 document.querySelectorAll('.tab').forEach(tab => {
@@ -161,37 +213,188 @@ document.querySelectorAll('.tab').forEach(tab => {
 
 // ---- Wallet check ----
 const checkWalletBtn = document.getElementById('checkWalletBtn');
+const connectWalletBtn = document.getElementById('connectWalletBtn');
+const disconnectWalletBtn = document.getElementById('disconnectWalletBtn');
+const walletStatus = document.getElementById('walletStatus');
 const walletError = document.getElementById('walletError');
 const walletStage = document.getElementById('walletStage');
 const walletRaw = document.getElementById('walletRaw');
 const walletVerdict = document.getElementById('walletVerdict');
 const walletPlainText = document.getElementById('walletPlainText');
+const payModal = document.getElementById('payModal');
+const closePayModalBtn = document.getElementById('closePayModalBtn');
+const payNowBtn = document.getElementById('payNowBtn');
 
-checkWalletBtn.onclick = async () => {
+let connectedWallet = null;
+
+function setWalletStatus(message) {
+  walletStatus.textContent = message;
+}
+
+function openPayModal() {
+  payModal.classList.add('visible');
+}
+
+function closePayModal() {
+  payModal.classList.remove('visible');
+}
+
+async function connectWallet() {
+  if (!window.ethereum) {
+    setWalletStatus('No wallet detected. Install MetaMask or another EVM wallet to continue.');
+    return;
+  }
+
+  try {
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const account = accounts && accounts[0];
+    if (!account) {
+      setWalletStatus('Wallet connected, but no account was selected.');
+      return;
+    }
+    connectedWallet = account;
+    setWalletStatus(`Wallet connected: ${account.slice(0, 6)}...${account.slice(-4)} • Base Sepolia ready`);
+    closePayModal();
+  } catch (err) {
+    setWalletStatus('Wallet connection was cancelled or blocked by the browser.');
+    console.error(err);
+  }
+}
+
+function disconnectWallet() {
+  connectedWallet = null;
+  setWalletStatus('No wallet connected yet. Connect a wallet to pay for the check.');
+}
+
+connectWalletBtn.onclick = connectWallet;
+disconnectWalletBtn.onclick = disconnectWallet;
+closePayModalBtn.onclick = closePayModal;
+payNowBtn.onclick = async () => {
+  closePayModal();
+  await performWalletCheck();
+};
+
+async function loadX402Libraries() {
+  const [{ createWalletClient, custom }, { baseSepolia }, x402] = await Promise.all([
+    import('https://esm.sh/viem@2.31.7'),
+    import('https://esm.sh/viem@2.31.7/chains'),
+    import('https://esm.sh/x402@1.2.0')
+  ]);
+
+  return {
+    createWalletClient,
+    custom,
+    baseSepolia,
+    createPaymentHeader: x402.createPaymentHeader,
+    selectPaymentRequirements: x402.selectPaymentRequirements
+  };
+}
+
+async function ensureX402Wallet(x402Libs) {
+  if (!window.ethereum) {
+    throw new Error('No browser wallet detected. Please install MetaMask or another EVM wallet and reload the page.');
+  }
+
+  const { createWalletClient, custom, baseSepolia } = x402Libs;
+  const provider = window.ethereum;
+  const accounts = await provider.request({ method: 'eth_requestAccounts' });
+  const account = accounts && accounts[0];
+  if (!account) {
+    throw new Error('No wallet account selected. Please connect your wallet and try again.');
+  }
+
+  const chainId = `0x${baseSepolia.id.toString(16)}`;
+  const addBaseSepolia = () => provider.request({
+    method: 'wallet_addEthereumChain',
+    params: [{
+      chainId,
+      chainName: 'Base Sepolia',
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: ['https://sepolia.base.org'],
+      blockExplorerUrls: ['https://sepolia-explorer.base.org']
+    }]
+  });
+
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId }]
+    });
+  } catch (switchErr) {
+    const switchMessage = String(switchErr && switchErr.message || '').toLowerCase();
+    const chainIsUnknown = switchErr && (
+      switchErr.code === 4902 ||
+      switchMessage.includes('unrecognized chain') ||
+      switchMessage.includes('unknown chain')
+    );
+    if (chainIsUnknown) {
+      await addBaseSepolia();
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId }]
+      });
+    } else {
+      throw switchErr;
+    }
+  }
+
+  const walletClient = createWalletClient({
+    account,
+    chain: baseSepolia,
+    transport: custom(provider)
+  });
+
+  return { provider, account, walletClient, baseSepolia };
+}
+
+async function payForRequest(url, body, fallbackErrorMessage) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (res.status !== 402) {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || fallbackErrorMessage);
+    return data;
+  }
+
+  const { accepts, x402Version } = await res.json();
+  const x402 = await loadX402Libraries();
+  const requirement = x402.selectPaymentRequirements(accepts, 'base-sepolia', 'exact');
+
+  const { walletClient } = await ensureX402Wallet(x402);
+  const paymentHeader = await x402.createPaymentHeader(walletClient, x402Version || 1, requirement);
+
+  const paidRes = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-PAYMENT': paymentHeader
+    },
+    body: JSON.stringify(body)
+  });
+
+  const paidData = await paidRes.json().catch(() => ({}));
+  if (!paidRes.ok) {
+    const detail = paidData.error || paidData.message;
+    throw new Error(detail ? `${fallbackErrorMessage} (${detail})` : fallbackErrorMessage);
+  }
+  return paidData;
+}
+
+async function performWalletCheck() {
   const address = document.getElementById('walletAddress').value.trim();
   const chain = document.getElementById('chainSelect').value;
   const kind = document.getElementById('kindSelect').value;
-  walletError.style.display = 'none';
-
-  if (!address) {
-    walletError.textContent = 'Enter a wallet address first.';
-    walletError.style.display = 'block';
-    return;
-  }
 
   checkWalletBtn.disabled = true;
   checkWalletBtn.textContent = 'Checking...';
   walletStage.style.display = 'none';
 
   try {
-    const res = await fetch('/api/check-wallet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, chain, kind })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Something went wrong.');
-
+    const data = await payForRequest('/api/check-wallet', { address, chain, kind }, 'Failed to check wallet approvals.');
     walletRaw.textContent = JSON.stringify(data.raw, null, 2);
     renderVerdict(walletVerdict, data.verdict);
     walletPlainText.textContent = data.explanation;
@@ -203,6 +406,25 @@ checkWalletBtn.onclick = async () => {
     checkWalletBtn.disabled = false;
     checkWalletBtn.textContent = 'Check approvals →';
   }
+}
+
+checkWalletBtn.onclick = () => {
+  const address = document.getElementById('walletAddress').value.trim();
+  walletError.style.display = 'none';
+
+  if (!address) {
+    walletError.textContent = 'Enter a wallet address first.';
+    walletError.style.display = 'block';
+    return;
+  }
+
+  if (!window.ethereum) {
+    walletError.textContent = 'No wallet detected. Install MetaMask or another EVM wallet to pay for this check.';
+    walletError.style.display = 'block';
+    return;
+  }
+
+  openPayModal();
 };
 
 function renderVerdict(el, verdict) {
