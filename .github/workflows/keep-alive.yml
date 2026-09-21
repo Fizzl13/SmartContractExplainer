@@ -1,0 +1,17 @@
+name: Keep Render instance warm
+
+on:
+  schedule:
+    # Every 10 minutes — comfortably under Render's ~15 min free-tier
+    # inactivity spin-down window. GitHub's cron scheduler isn't
+    # millisecond-precise, so this is a safety margin, not a guarantee.
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          curl -sf -m 30 https://smartcontractexplainer.onrender.com/api/health
