@@ -196,11 +196,47 @@ app.post('/api/check-wallet', async (req, res) => {
   }
 });
 
-// Explain a manually pasted piece of approval/contract JSON (for demo scenarios)
+// Explain a manually pasted piece of approval/contract JSON (paid endpoint)
 app.post('/api/explain', async (req, res) => {
   try {
     const { data } = req.body;
     if (!data) return res.status(400).json({ error: 'data is required' });
+
+    const { verdict, explanation } = await translateWithClaude(data);
+    res.json({ verdict, explanation });
+  } catch (err) {
+    console.error(err);
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// Free demo scenarios shown on the "Try a sample" tab, kept in sync with public/index.html.
+// This is a fixed, known set — not a general free-explain backdoor around the x402 paywall.
+const DEMO_SCENARIOS = [
+  { function: 'approve', token: 'USDC', spender: '0x7a3f...92e1', spender_verified: false, approved_amount: 'unlimited', duration: 'until manually revoked', spender_age_days: 4 },
+  { function: 'setApprovalForAll', collection: 'BoredApeYachtClub', operator: '0x1e0049...marketplace', operator_verified: true, operator_label: 'OpenSea Seaport 1.6', approved: 'all tokens', duration: 'until manually revoked' },
+  { function: 'permit2', token: 'ETH (wrapped)', spender: 'Uniswap Universal Router', spender_verified: true, approved_amount: '0.5 ETH', duration: 'expires in 30 minutes' }
+];
+
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key) => deepEqual(a[key], b[key]));
+}
+
+// Free endpoint for the "Try a sample" demo tab — not behind the x402 paywall, but
+// restricted to the fixed DEMO_SCENARIOS list so it can't be used as a free stand-in
+// for the paid /api/explain endpoint.
+app.post('/api/demo-explain', async (req, res) => {
+  try {
+    const { data } = req.body;
+    if (!data) return res.status(400).json({ error: 'data is required' });
+    if (!DEMO_SCENARIOS.some((scenario) => deepEqual(scenario, data))) {
+      return res.status(400).json({ error: 'Unknown demo scenario.' });
+    }
 
     const { verdict, explanation } = await translateWithClaude(data);
     res.json({ verdict, explanation });

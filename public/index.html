@@ -467,7 +467,7 @@ translateBtn.onclick = async () => {
   demoPlainText.textContent = '';
 
   try {
-    const res = await fetch('/api/explain', {
+    const res = await fetch('/api/demo-explain', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: activeScenario })
