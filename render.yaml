@@ -10,3 +10,15 @@ services:
         sync: false
       - key: GOPLUS_ACCESS_TOKEN
         sync: false
+      - key: GOPLUS_DEBUG_LOG
+        sync: false
+      - key: X402_PAY_TO
+        sync: false
+      - key: X402_NETWORK
+        sync: false
+      - key: X402_CHECK_PRICE
+        sync: false
+      - key: X402_EXPLAIN_PRICE
+        sync: false
+      - key: X402_FACILITATOR_URL
+        sync: false
