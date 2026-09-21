@@ -1,11 +1,44 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const { paymentMiddleware } = require('x402-express');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+const x402PayTo = process.env.X402_PAY_TO;
+if (x402PayTo) {
+  const x402Network = process.env.X402_NETWORK || 'base-sepolia';
+  const x402CheckPrice = process.env.X402_CHECK_PRICE || '$0.10';
+  const x402ExplainPrice = process.env.X402_EXPLAIN_PRICE || '$0.05';
+  const x402FacilitatorUrl = process.env.X402_FACILITATOR_URL || 'https://x402.org/facilitator';
+
+  app.use(paymentMiddleware(x402PayTo, {
+    '/api/check-wallet': {
+      price: x402CheckPrice,
+      network: x402Network,
+      config: {
+        description: 'Explain wallet token approvals in plain language'
+      }
+    },
+    '/api/explain': {
+      price: x402ExplainPrice,
+      network: x402Network,
+      config: {
+        description: 'Explain a pasted approval payload in plain language'
+      }
+    }
+  }, {
+    url: x402FacilitatorUrl
+  }));
+
+  console.log(`x402 paywall enabled for /api/check-wallet and /api/explain using facilitator ${x402FacilitatorUrl}`);
+} else {
+  console.log('x402 paywall disabled: set X402_PAY_TO in your environment to enable it.');
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const GOPLUS_BASE = 'https://api.gopluslabs.io/api/v2';
@@ -25,10 +58,20 @@ const CHAINS = {
  * Fetch approval data for a wallet address from GoPlus.
  * kind: 'token' (ERC-20) or 'nft' (ERC-721)
  */
+const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+const CHAIN_ID_RE = /^[a-zA-Z0-9-]+$/;
+
 async function fetchApprovals({ chainId, address, kind }) {
+  if (!ADDRESS_RE.test(address)) {
+    throw Object.assign(new Error('Invalid wallet address format.'), { statusCode: 400 });
+  }
+  if (!CHAIN_ID_RE.test(String(chainId))) {
+    throw Object.assign(new Error('Invalid chain.'), { statusCode: 400 });
+  }
+
   const endpoint = kind === 'nft' ? 'nft721_approval_security' : 'token_approval_security';
   const normalizedAddress = address.toLowerCase();
-  const url = `${GOPLUS_BASE}/${endpoint}/${chainId}?addresses=${normalizedAddress}`;
+  const url = `${GOPLUS_BASE}/${endpoint}/${encodeURIComponent(chainId)}?addresses=${encodeURIComponent(normalizedAddress)}`;
 
   const headers = {};
   if (process.env.GOPLUS_ACCESS_TOKEN) {
@@ -37,11 +80,13 @@ async function fetchApprovals({ chainId, address, kind }) {
 
   const res = await fetch(url, { headers });
   const rawText = await res.text();
-  console.log('--- GoPlus raw response ---');
-  console.log('URL:', url);
-  console.log('HTTP status:', res.status);
-  console.log('Body:', rawText);
-  console.log('---------------------------');
+  if (process.env.GOPLUS_DEBUG_LOG === 'true') {
+    console.log('--- GoPlus raw response ---');
+    console.log('URL:', url);
+    console.log('HTTP status:', res.status);
+    console.log('Body:', rawText);
+    console.log('---------------------------');
+  }
 
   if (!res.ok) {
     throw new Error(`GoPlus API error: ${res.status} ${res.statusText}`);
@@ -69,7 +114,7 @@ async function fetchApprovals({ chainId, address, kind }) {
  */
 async function translateWithClaude(approvalData) {
   if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set on the server.');
+    throw Object.assign(new Error('ANTHROPIC_API_KEY is not set on the server.'), { statusCode: 503 });
   }
 
   const prompt = `You are PlainText, an explainer for people with no crypto background who are about to review a wallet's token/NFT approvals.
@@ -101,7 +146,7 @@ Start your answer with exactly one of these three words followed by a colon: "SA
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Anthropic API error: ${res.status} ${errText}`);
+    throw Object.assign(new Error(`Anthropic API error: ${res.status} ${errText}`), { statusCode: 502 });
   }
 
   const data = await res.json();
@@ -127,7 +172,7 @@ app.post('/api/check-wallet', async (req, res) => {
     res.json({ verdict, explanation, raw: approvalData });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 
@@ -141,27 +186,7 @@ app.post('/api/explain', async (req, res) => {
     res.json({ verdict, explanation });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Temporary debug helper — visit directly in the browser to see the raw GoPlus response.
-// Remove this route before sharing the app publicly.
-app.get('/api/debug-approvals', async (req, res) => {
-  try {
-    const { address, chain = 'ethereum', kind = 'token' } = req.query;
-    if (!address) return res.status(400).json({ error: 'pass ?address=0x...' });
-    const chainId = CHAINS[chain] || chain;
-    const endpoint = kind === 'nft' ? 'nft721_approval_security' : 'token_approval_security';
-    const url = `${GOPLUS_BASE}/${endpoint}/${chainId}?addresses=${address.toLowerCase()}`;
-    const headers = {};
-    if (process.env.GOPLUS_ACCESS_TOKEN) headers['access_token'] = process.env.GOPLUS_ACCESS_TOKEN;
-
-    const gpRes = await fetch(url, { headers });
-    const text = await gpRes.text();
-    res.type('json').send(text);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 
