@@ -22,3 +22,7 @@ services:
         sync: false
       - key: X402_FACILITATOR_URL
         sync: false
+      - key: CDP_API_KEY_ID
+        sync: false
+      - key: CDP_API_KEY_SECRET
+        sync: false

@@ -4,6 +4,7 @@ const path = require('path');
 const { paymentMiddleware } = require('@x402/express');
 const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
 const { ExactEvmScheme } = require('@x402/evm/exact/server');
+const { createFacilitatorConfig } = require('@coinbase/x402');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,7 +25,15 @@ if (x402PayTo) {
   const x402ExplainPrice = process.env.X402_EXPLAIN_PRICE || '$0.05';
   const x402FacilitatorUrl = process.env.X402_FACILITATOR_URL || 'https://x402.org/facilitator';
 
-  const facilitatorClient = new HTTPFacilitatorClient({ url: x402FacilitatorUrl });
+  // Prefer the Coinbase CDP facilitator when credentials are set — it's the only
+  // facilitator that gets this app indexed in Coinbase's x402 Bazaar. Falls back to
+  // the URL-based facilitator (PayAI by default) otherwise.
+  const usingCdp = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
+  const facilitatorConfig = usingCdp
+    ? createFacilitatorConfig(process.env.CDP_API_KEY_ID, process.env.CDP_API_KEY_SECRET)
+    : { url: x402FacilitatorUrl };
+
+  const facilitatorClient = new HTTPFacilitatorClient(facilitatorConfig);
   const x402Server = new x402ResourceServer(facilitatorClient);
   x402Server.register('eip155:*', new ExactEvmScheme());
 
@@ -41,7 +50,7 @@ if (x402PayTo) {
     }
   }, x402Server));
 
-  console.log(`x402 paywall enabled for /api/check-wallet and /api/explain using facilitator ${x402FacilitatorUrl}`);
+  console.log(`x402 paywall enabled for /api/check-wallet and /api/explain using facilitator ${usingCdp ? 'Coinbase CDP' : x402FacilitatorUrl}`);
 } else {
   console.log('x402 paywall disabled: set X402_PAY_TO in your environment to enable it.');
 }
