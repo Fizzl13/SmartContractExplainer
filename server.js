@@ -92,6 +92,26 @@ const CHAINS = {
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const CHAIN_ID_RE = /^[a-zA-Z0-9-]+$/;
 
+// Simple in-memory per-key rate limit, for free endpoints where the x402
+// paywall doesn't already cap cost exposure. Fine for a single-instance
+// deployment; would need a shared store (e.g. Redis) across replicas.
+function createRateLimiter(limit, windowMs) {
+  const hits = new Map();
+  return function check(key) {
+    const now = Date.now();
+    const entry = hits.get(key);
+    if (!entry || now > entry.resetAt) {
+      hits.set(key, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+    if (entry.count >= limit) return false;
+    entry.count += 1;
+    return true;
+  };
+}
+
+const MAX_EXPLAIN_PAYLOAD_CHARS = 5000;
+
 async function fetchApprovals({ chainId, address, kind }) {
   if (!ADDRESS_RE.test(address)) {
     throw Object.assign(new Error('Invalid wallet address format.'), { statusCode: 400 });
@@ -257,9 +277,15 @@ function deepEqual(a, b) {
 
 // Free endpoint for the "Try a sample" demo tab — not behind the x402 paywall, but
 // restricted to the fixed DEMO_SCENARIOS list so it can't be used as a free stand-in
-// for the paid /api/explain endpoint.
+// for the paid /api/explain endpoint. Also rate-limited since it's free and callable
+// directly (bypassing the UI) by anyone who finds the route.
+const checkDemoRateLimit = createRateLimiter(20, 60 * 60 * 1000);
+
 app.post('/api/demo-explain', async (req, res) => {
   try {
+    if (!checkDemoRateLimit(req.ip)) {
+      return res.status(429).json({ error: 'Rate limit exceeded — try again later.' });
+    }
     const { data } = req.body;
     if (!data) return res.status(400).json({ error: 'data is required' });
     if (!DEMO_SCENARIOS.some((scenario) => deepEqual(scenario, data))) {
@@ -312,6 +338,10 @@ function buildMcpServer() {
     },
     async ({ data }) => {
       try {
+        const size = JSON.stringify(data).length;
+        if (size > MAX_EXPLAIN_PAYLOAD_CHARS) {
+          return { content: [{ type: 'text', text: `Error: payload too large (${size} chars, max ${MAX_EXPLAIN_PAYLOAD_CHARS}).` }], isError: true };
+        }
         const { verdict, explanation } = await translateWithClaude(data);
         return { content: [{ type: 'text', text: `${verdict}: ${explanation}` }] };
       } catch (err) {
@@ -323,24 +353,7 @@ function buildMcpServer() {
   return server;
 }
 
-// Simple in-memory per-IP rate limit — this endpoint is free, unlike the
-// paid HTTP routes above, so it needs a cap on API cost exposure. Fine for a
-// single-instance deployment; would need a shared store across replicas.
-const MCP_RATE_LIMIT = 20;
-const MCP_RATE_WINDOW_MS = 60 * 60 * 1000;
-const mcpRateLimits = new Map();
-
-function checkMcpRateLimit(ip) {
-  const now = Date.now();
-  const entry = mcpRateLimits.get(ip);
-  if (!entry || now > entry.resetAt) {
-    mcpRateLimits.set(ip, { count: 1, resetAt: now + MCP_RATE_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= MCP_RATE_LIMIT) return false;
-  entry.count += 1;
-  return true;
-}
+const checkMcpRateLimit = createRateLimiter(20, 60 * 60 * 1000);
 
 const mcpHandler = createMcpHandler(buildMcpServer, { responseMode: 'json' });
 
