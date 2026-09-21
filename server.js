@@ -37,6 +37,15 @@ if (x402PayTo) {
   const x402Server = new x402ResourceServer(facilitatorClient);
   x402Server.register('eip155:*', new ExactEvmScheme());
 
+  // Diagnostic logging only — doesn't change behavior. The 402 response a client
+  // sees on verify/settle failure carries no detail, so log the real reason here.
+  x402Server.onVerifyFailure(async (ctx) => {
+    console.error('[x402] verify failed:', ctx.error && ctx.error.message, '| requirements:', JSON.stringify(ctx.requirements));
+  });
+  x402Server.onSettleFailure(async (ctx) => {
+    console.error('[x402] settle failed:', ctx.error && ctx.error.message, '| requirements:', JSON.stringify(ctx.requirements));
+  });
+
   app.use(paymentMiddleware({
     'POST /api/check-wallet': {
       accepts: [{ scheme: 'exact', price: x402CheckPrice, network: x402Caip2Network, payTo: x402PayTo }],
