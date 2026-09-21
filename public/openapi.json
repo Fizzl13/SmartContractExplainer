@@ -1,0 +1,115 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PlainText Wallet Approval Checker",
+    "version": "1.0.0",
+    "description": "Looks up a wallet's live token/NFT approvals via the GoPlus Security API and explains them in plain language for people with no crypto background.",
+    "x-guidance": "Use POST /api/check-wallet to check a real wallet's token or NFT approvals and get a plain-language safety verdict (SAFE, CAUTION, or RISK) with an explanation. Use POST /api/explain to get the same kind of plain-language explanation for an approval/permission JSON payload you already have, instead of looking one up on-chain."
+  },
+  "paths": {
+    "/api/check-wallet": {
+      "post": {
+        "operationId": "checkWallet",
+        "summary": "Check a wallet's approvals and explain the risk in plain language",
+        "tags": ["Wallet"],
+        "x-payment-info": {
+          "price": { "mode": "fixed", "currency": "USD", "amount": "0.100000" },
+          "protocols": [{ "x402": {} }]
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "description": "EVM wallet address to check",
+                    "pattern": "^0x[a-fA-F0-9]{40}$"
+                  },
+                  "chain": {
+                    "type": "string",
+                    "description": "Chain to check approvals on (default: ethereum)",
+                    "enum": ["ethereum", "bsc", "polygon", "arbitrum", "optimism", "base", "avalanche"]
+                  },
+                  "kind": {
+                    "type": "string",
+                    "description": "Approval type to check (default: token)",
+                    "enum": ["token", "nft"]
+                  }
+                },
+                "required": ["address"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Plain-language verdict on the wallet's approvals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verdict": { "type": "string", "enum": ["SAFE", "CAUTION", "RISK"] },
+                    "explanation": { "type": "string" },
+                    "raw": { "type": "array", "items": { "type": "object" } }
+                  },
+                  "required": ["verdict", "explanation"]
+                }
+              }
+            }
+          },
+          "402": { "description": "Payment Required" }
+        }
+      }
+    },
+    "/api/explain": {
+      "post": {
+        "operationId": "explainApproval",
+        "summary": "Explain a pasted approval/permission payload in plain language",
+        "tags": ["Wallet"],
+        "x-payment-info": {
+          "price": { "mode": "fixed", "currency": "USD", "amount": "0.050000" },
+          "protocols": [{ "x402": {} }]
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "description": "Arbitrary approval/permission JSON payload to explain"
+                  }
+                },
+                "required": ["data"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Plain-language explanation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verdict": { "type": "string", "enum": ["SAFE", "CAUTION", "RISK"] },
+                    "explanation": { "type": "string" }
+                  },
+                  "required": ["verdict", "explanation"]
+                }
+              }
+            }
+          },
+          "402": { "description": "Payment Required" }
+        }
+      }
+    }
+  }
+}
