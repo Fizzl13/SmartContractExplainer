@@ -5,6 +5,7 @@ const { paymentMiddleware } = require('@x402/express');
 const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
 const { ExactEvmScheme } = require('@x402/evm/exact/server');
 const { createFacilitatorConfig } = require('@coinbase/x402');
+const { declareDiscoveryExtension } = require('@x402/extensions/bazaar');
 const { McpServer, createMcpHandler } = require('@modelcontextprotocol/server');
 const { z } = require('zod/v4');
 
@@ -22,6 +23,31 @@ const CAIP2_NETWORKS = {
   base: 'eip155:8453',
   'base-sepolia': 'eip155:84532'
 };
+
+// @x402/express puts the v2 challenge only in the PAYMENT-REQUIRED header and
+// sends an empty {} body; some clients read accepts[] from the body, so mirror
+// it there.
+function mirrorChallengeIntoBody(req, res, next) {
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 402 && !(body && Array.isArray(body.accepts))) {
+      const header = res.getHeader('PAYMENT-REQUIRED');
+      if (header) {
+        try {
+          const challenge = JSON.parse(Buffer.from(String(header), 'base64').toString('utf8'));
+          if (Array.isArray(challenge.accepts)) {
+            body = { ...(body || {}), x402Version: challenge.x402Version, accepts: challenge.accepts };
+            if (challenge.error) body.error = challenge.error;
+          }
+        } catch {
+          // leave the body as is
+        }
+      }
+    }
+    return json(body);
+  };
+  next();
+}
 
 const x402PayTo = process.env.X402_PAY_TO;
 if (x402PayTo) {
@@ -52,16 +78,66 @@ if (x402PayTo) {
     console.error('[x402] settle failed:', ctx.error && ctx.error.message, '| requirements:', JSON.stringify(ctx.requirements));
   });
 
+  // Bazaar discovery metadata: lets agents that browse the x402 Bazaar (and
+  // indexers like x402scan) see the request body and response shape, not just
+  // the price. Kept in sync with public/openapi.json.
+  const verdictSchema = {
+    type: 'object',
+    properties: {
+      verdict: { type: 'string', enum: ['SAFE', 'CAUTION', 'RISK'] },
+      explanation: { type: 'string' }
+    },
+    required: ['verdict', 'explanation']
+  };
+  const checkWalletDiscovery = declareDiscoveryExtension({
+    method: 'POST',
+    bodyType: 'json',
+    input: { address: '0x6B0F4651eD42893ab58139938175E4a69f175F25', chain: 'base', kind: 'token' },
+    inputSchema: {
+      properties: {
+        address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$', description: 'EVM wallet address to check' },
+        chain: { type: 'string', enum: ['ethereum', 'bsc', 'polygon', 'arbitrum', 'optimism', 'base', 'avalanche'], description: 'Chain to check approvals on (default: ethereum)' },
+        kind: { type: 'string', enum: ['token', 'nft'], description: 'Approval type to check (default: token)' }
+      },
+      required: ['address']
+    },
+    output: {
+      schema: verdictSchema,
+      example: { verdict: 'SAFE', explanation: 'This wallet has no active token approvals, so no app can move its tokens without asking first.' }
+    }
+  });
+  const explainDiscovery = declareDiscoveryExtension({
+    method: 'POST',
+    bodyType: 'json',
+    input: { data: { function: 'approve', token: 'USDC', spender: '0x7a3f...92e1', spender_verified: false, approved_amount: 'unlimited' } },
+    inputSchema: {
+      properties: {
+        data: { type: 'object', description: 'Approval/permission JSON payload to explain (max 5000 characters)' }
+      },
+      required: ['data']
+    },
+    output: {
+      schema: verdictSchema,
+      example: { verdict: 'RISK', explanation: 'You would let an unverified, days-old address spend all of your USDC, forever.' }
+    }
+  });
+  const serviceMetadata = { serviceName: 'PlainText', tags: ['wallet-security', 'approvals', 'crypto', 'explainer'] };
+
+  app.use(mirrorChallengeIntoBody);
   app.use(paymentMiddleware({
     'POST /api/check-wallet': {
       accepts: [{ scheme: 'exact', price: x402CheckPrice, network: x402Caip2Network, payTo: x402PayTo }],
-      description: 'Explain wallet token approvals in plain language',
-      mimeType: 'application/json'
+      description: "Check an EVM wallet's live token/NFT approvals and get a plain-language verdict (SAFE, CAUTION or RISK) with an explanation",
+      mimeType: 'application/json',
+      ...serviceMetadata,
+      extensions: checkWalletDiscovery
     },
     'POST /api/explain': {
       accepts: [{ scheme: 'exact', price: x402ExplainPrice, network: x402Caip2Network, payTo: x402PayTo }],
-      description: 'Explain a pasted approval payload in plain language',
-      mimeType: 'application/json'
+      description: 'Explain a pasted approval/permission payload in plain language, with a SAFE, CAUTION or RISK verdict',
+      mimeType: 'application/json',
+      ...serviceMetadata,
+      extensions: explainDiscovery
     }
   }, x402Server));
 
