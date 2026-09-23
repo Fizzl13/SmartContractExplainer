@@ -12,7 +12,7 @@
     "/api/check-wallet": {
       "post": {
         "operationId": "checkWallet",
-        "summary": "Check a wallet's approvals and explain the risk in plain language",
+        "summary": "Check a wallet's approvals and explain the risk",
         "tags": ["Wallet"],
         "x-payment-info": {
           "price": { "mode": "fixed", "currency": "USD", "amount": "0.100000" },
@@ -72,7 +72,7 @@
     "/api/explain": {
       "post": {
         "operationId": "explainApproval",
-        "summary": "Explain a pasted approval/permission payload in plain language",
+        "summary": "Generate a plain-language verdict for an approval payload",
         "tags": ["Wallet"],
         "x-payment-info": {
           "price": { "mode": "fixed", "currency": "USD", "amount": "0.050000" },
