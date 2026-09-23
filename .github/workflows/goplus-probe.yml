@@ -1,0 +1,18 @@
+# Temporary: what does GoPlus return for well-known wallets? (removed after one run)
+name: GoPlus probe
+on:
+  push:
+    paths: ['.github/workflows/goplus-probe.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for a in 0xd8da6bf26964af9d7eed9e03e53415d37aa96045 0x220866b1a2219f40e72f5c628b65d54268ca3a9d 0x3ddfa8ec3052539b6c9549f12cea2c295cff5296; do
+            for ep in token_approval_security nft721_approval_security; do
+              echo "== $a $ep"
+              curl -s "https://api.gopluslabs.io/api/v2/$ep/1?addresses=$a" | jq -c '{code, message, n: ((.result // []) | length), first: ((.result // [])[0] | if . then {token_symbol, n: (.approved_list | length)} else null end)}'
+            done
+          done
+          echo "== v1 endpoint for comparison"
+          curl -s "https://api.gopluslabs.io/api/v1/approval_security/1?contract_addresses=0xd8da6bf26964af9d7eed9e03e53415d37aa96045" | head -c 400; echo
