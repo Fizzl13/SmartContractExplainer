@@ -14,6 +14,8 @@ services:
         sync: false
       - key: X402_PAY_TO
         sync: false
+      - key: X402_PAY_TO_SOLANA
+        sync: false
       - key: X402_NETWORK
         sync: false
       - key: X402_CHECK_PRICE

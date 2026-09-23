@@ -4,6 +4,7 @@ const path = require('path');
 const { paymentMiddleware } = require('@x402/express');
 const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
 const { ExactEvmScheme } = require('@x402/evm/exact/server');
+const { ExactSvmScheme } = require('@x402/svm/exact/server');
 const { createFacilitatorConfig } = require('@coinbase/x402');
 const { declareDiscoveryExtension } = require('@x402/extensions/bazaar');
 const { McpServer, createMcpHandler } = require('@modelcontextprotocol/server');
@@ -22,6 +23,10 @@ app.use(express.json());
 const CAIP2_NETWORKS = {
   base: 'eip155:8453',
   'base-sepolia': 'eip155:84532'
+};
+const SOLANA_NETWORKS = {
+  mainnet: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+  devnet: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'
 };
 
 // @x402/express puts the v2 challenge only in the PAYMENT-REQUIRED header and
@@ -55,19 +60,30 @@ if (x402PayTo) {
   const x402Caip2Network = CAIP2_NETWORKS[x402Network] || x402Network;
   const x402CheckPrice = process.env.X402_CHECK_PRICE || '$0.10';
   const x402ExplainPrice = process.env.X402_EXPLAIN_PRICE || '$0.05';
-  const x402FacilitatorUrl = process.env.X402_FACILITATOR_URL || 'https://x402.org/facilitator';
+  // x402.org/facilitator is testnet-only; on mainnet the fallback is PayAI
+  // (production, Base + Solana, no account needed).
+  const x402FacilitatorUrl = process.env.X402_FACILITATOR_URL
+    || (x402Caip2Network === CAIP2_NETWORKS.base ? 'https://facilitator.payai.network' : 'https://x402.org/facilitator');
+
+  // Optional second payment option: USDC on Solana (mainnet next to Base, devnet
+  // next to Base Sepolia). Set X402_PAY_TO_SOLANA to a Solana wallet that has a
+  // USDC token account; without it only the EVM option is offered.
+  const x402PayToSolana = process.env.X402_PAY_TO_SOLANA;
+  const x402SolanaNetwork = process.env.X402_SOLANA_NETWORK
+    || (x402Caip2Network === CAIP2_NETWORKS.base ? SOLANA_NETWORKS.mainnet : SOLANA_NETWORKS.devnet);
 
   // Prefer the Coinbase CDP facilitator when credentials are set — it's the only
-  // facilitator that gets this app indexed in Coinbase's x402 Bazaar. Falls back to
-  // the URL-based facilitator (PayAI by default) otherwise.
+  // facilitator that gets this app indexed in Coinbase's x402 Bazaar. The
+  // URL-based facilitator (PayAI in production) stays as fallback: the first
+  // facilitator that supports a network handles it.
   const usingCdp = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
-  const facilitatorConfig = usingCdp
-    ? createFacilitatorConfig(process.env.CDP_API_KEY_ID, process.env.CDP_API_KEY_SECRET)
-    : { url: x402FacilitatorUrl };
+  const facilitators = [];
+  if (usingCdp) facilitators.push(new HTTPFacilitatorClient(createFacilitatorConfig(process.env.CDP_API_KEY_ID, process.env.CDP_API_KEY_SECRET)));
+  facilitators.push(new HTTPFacilitatorClient({ url: x402FacilitatorUrl }));
 
-  const facilitatorClient = new HTTPFacilitatorClient(facilitatorConfig);
-  const x402Server = new x402ResourceServer(facilitatorClient);
+  const x402Server = new x402ResourceServer(facilitators);
   x402Server.register('eip155:*', new ExactEvmScheme());
+  if (x402PayToSolana) x402Server.register(x402SolanaNetwork, new ExactSvmScheme());
 
   // Diagnostic logging only — doesn't change behavior. The 402 response a client
   // sees on verify/settle failure carries no detail, so log the real reason here.
@@ -124,16 +140,21 @@ if (x402PayTo) {
   const serviceMetadata = { serviceName: 'PlainText', tags: ['wallet-security', 'approvals', 'crypto', 'explainer'] };
 
   app.use(mirrorChallengeIntoBody);
+  const acceptsFor = (price) => [
+    { scheme: 'exact', price, network: x402Caip2Network, payTo: x402PayTo },
+    ...(x402PayToSolana ? [{ scheme: 'exact', price, network: x402SolanaNetwork, payTo: x402PayToSolana }] : [])
+  ];
+
   app.use(paymentMiddleware({
     'POST /api/check-wallet': {
-      accepts: [{ scheme: 'exact', price: x402CheckPrice, network: x402Caip2Network, payTo: x402PayTo }],
+      accepts: acceptsFor(x402CheckPrice),
       description: "Check an EVM wallet's live token/NFT approvals and get a plain-language verdict (SAFE, CAUTION or RISK) with an explanation",
       mimeType: 'application/json',
       ...serviceMetadata,
       extensions: checkWalletDiscovery
     },
     'POST /api/explain': {
-      accepts: [{ scheme: 'exact', price: x402ExplainPrice, network: x402Caip2Network, payTo: x402PayTo }],
+      accepts: acceptsFor(x402ExplainPrice),
       description: 'Explain a pasted approval/permission payload in plain language, with a SAFE, CAUTION or RISK verdict',
       mimeType: 'application/json',
       ...serviceMetadata,
@@ -141,7 +162,8 @@ if (x402PayTo) {
     }
   }, x402Server));
 
-  console.log(`x402 paywall enabled for /api/check-wallet and /api/explain using facilitator ${usingCdp ? 'Coinbase CDP' : x402FacilitatorUrl}`);
+  const networks = [x402Caip2Network, ...(x402PayToSolana ? [x402SolanaNetwork] : [])].join(' + ');
+  console.log(`x402 paywall enabled for /api/check-wallet and /api/explain on ${networks} using facilitator ${usingCdp ? `Coinbase CDP (fallback ${x402FacilitatorUrl})` : x402FacilitatorUrl}`);
 } else {
   console.log('x402 paywall disabled: set X402_PAY_TO in your environment to enable it.');
 }
