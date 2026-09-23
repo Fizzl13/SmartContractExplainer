@@ -3,11 +3,16 @@
   "name": "io.github.Fizzl13/plaintext-wallet-checker",
   "title": "PlainText Wallet Approval Checker",
   "description": "Checks a wallet's token/NFT approvals via GoPlus and explains risk in plain language.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "remotes": [
     {
       "type": "streamable-http",
       "url": "https://smartcontractexplainer.onrender.com/mcp"
     }
-  ]
+  ],
+  "repository": {
+    "url": "https://github.com/Fizzl13/SmartContractExplainer",
+    "source": "github"
+  },
+  "websiteUrl": "https://smartcontractexplainer.onrender.com"
 }
