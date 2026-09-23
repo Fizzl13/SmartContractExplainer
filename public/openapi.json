@@ -16,7 +16,9 @@
         "tags": ["Wallet"],
         "x-payment-info": {
           "price": { "mode": "fixed", "currency": "USD", "amount": "0.100000" },
-          "protocols": ["x402"]
+          "protocols": ["x402"],
+          "networks": ["eip155:8453", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
+          "asset": "USDC"
         },
         "requestBody": {
           "required": true,
@@ -74,7 +76,9 @@
         "tags": ["Wallet"],
         "x-payment-info": {
           "price": { "mode": "fixed", "currency": "USD", "amount": "0.050000" },
-          "protocols": ["x402"]
+          "protocols": ["x402"],
+          "networks": ["eip155:8453", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
+          "asset": "USDC"
         },
         "requestBody": {
           "required": true,
