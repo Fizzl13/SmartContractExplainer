@@ -184,7 +184,13 @@ async function main() {
       await page.goto(SITE, { waitUntil: 'networkidle', timeout: 90000 });
       await zoomPage(page);
       // Room below the footer, so it can scroll to the middle, above the captions.
-      await page.evaluate(() => { document.body.style.paddingBottom = '60vh'; });
+      await page.evaluate(() => {
+        document.body.style.paddingBottom = '60vh';
+        // No empty or stale verdict label while an explanation is loading.
+        const style = document.createElement('style');
+        style.textContent = '#demoVerdict:has(span:last-child:empty) { visibility: hidden; }';
+        document.head.appendChild(style);
+      });
       await page.click('.tab[data-tab="demo"]');
       await page.click('.scenario-btn >> nth=0');
       await page.evaluate(() => document.getElementById('demoRaw').scrollIntoView({ block: 'center' }));
@@ -222,6 +228,11 @@ async function main() {
       await center(page, '.scenarios');
       await sleep(500);
       await page.click('.scenario-btn >> nth=2');
+      await page.evaluate(() => {
+        const v = document.getElementById('demoVerdict');
+        v.className = 'verdict';
+        v.querySelector('span:last-child').textContent = '';
+      });
       await sleep(300);
       await center(page, '#demoStage');
       for (const key of ['"spender"', '"approved_amount"', '"duration"']) {
