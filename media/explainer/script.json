@@ -1,0 +1,65 @@
+{
+  "title": "PlainText — explainer",
+  "segments": [
+    {
+      "id": "hook",
+      "scene": "hook-code",
+      "text": "One signature can hand a stranger your entire wallet. And the pop-up asking for it is written in code, not English."
+    },
+    {
+      "id": "intro",
+      "scene": "hero",
+      "text": "PlainText reads it for you."
+    },
+    {
+      "id": "trap",
+      "scene": "trap-fields",
+      "text": "Here's a common trap: an unlimited approval, to a contract nobody has verified, created just four days ago."
+    },
+    {
+      "id": "explain",
+      "scene": "explain-risk",
+      "text": "One click, and you get it in plain English."
+    },
+    {
+      "id": "risky",
+      "scene": "show-risk",
+      "text": "Risky. Whoever controls that contract could move all of your USDC, at any time, until you revoke it."
+    },
+    {
+      "id": "contrast",
+      "scene": "contrast",
+      "text": "Compare that with a limited approval to Uniswap, that expires in thirty minutes."
+    },
+    {
+      "id": "safe",
+      "scene": "show-safe",
+      "text": "Likely safe. Same kind of pop-up, a very different risk."
+    },
+    {
+      "id": "wallet",
+      "scene": "wallet",
+      "text": "For your own wallet, paste your address, pick a chain, and PlainText checks every approval you've ever given."
+    },
+    {
+      "id": "price",
+      "scene": "price",
+      "text": "A full check costs ten cents in USDC, paid per check. No account, no subscription, and nothing is stored."
+    },
+    {
+      "id": "agents",
+      "scene": "agents",
+      "text": "AI agents can use it too: they pay per call with x402, on Base or Solana."
+    },
+    {
+      "id": "end",
+      "scene": "card",
+      "card": {
+        "title": "PlainText",
+        "sub": "Before you sign, know what you're signing.",
+        "note": "smartcontractexplainer.onrender.com"
+      },
+      "text": "PlainText. Before you sign, know what you're signing."
+    }
+  ]
+}
