@@ -1,0 +1,49 @@
+# End-to-end check of the live site: pages, discovery, the paywall, and the
+# free paths that call GoPlus and Claude (the demo and the MCP tools).
+# Uses 2 demo calls and 2 MCP calls of the hourly free quota; never pays.
+name: Smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/smoke.yml']
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      SITE: https://smartcontractexplainer.onrender.com
+    steps:
+      - name: Wake up
+        run: curl -s -o /dev/null --retry 5 --retry-delay 10 --max-time 90 "$SITE/api/health"
+      - name: Pages and discovery
+        run: |
+          curl -sf "$SITE/" | grep -q 'Before you sign'
+          curl -sf "$SITE/api/health"; echo
+          curl -sf "$SITE/openapi.json" | jq -r '.openapi, (.paths | keys[])'
+          curl -sf "$SITE/.well-known/x402" | jq -c .
+      - name: Paid routes answer 402 with Base and Solana options
+        run: |
+          for route in check-wallet explain; do
+            code=$(curl -s -o /dev/null -D h.txt -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "$SITE/api/$route")
+            echo "$route: $code"; [ "$code" = 402 ]
+            grep -i '^payment-required:' h.txt | cut -d' ' -f2 | tr -d '\r' | base64 -d | jq -c '[.accepts[] | {network, amount}]'
+          done
+      - name: Demo explains (Claude)
+        run: |
+          explain() {
+            curl -sf -X POST -H 'Content-Type: application/json' -d "{\"data\":$1}" "$SITE/api/demo-explain" | tee out.json; echo
+            jq -e --arg v "$2" '.verdict == $v and (.explanation | length > 40)' out.json
+          }
+          explain '{"function":"approve","token":"USDC","spender":"0x7a3f...92e1","spender_verified":false,"approved_amount":"unlimited","duration":"until manually revoked","spender_age_days":4}' RISK
+          explain '{"function":"permit2","token":"ETH (wrapped)","spender":"Uniswap Universal Router","spender_verified":true,"approved_amount":"0.5 ETH","duration":"expires in 30 minutes"}' SAFE
+      - name: Free MCP wallet check (GoPlus + Claude)
+        run: |
+          mcp() {
+            # The answer is JSON or an event stream ("data: {...}"): accept both.
+            curl -sf -X POST "$SITE/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d "$1" \
+              | sed -n 's/^data: //; /^{/p'
+          }
+          mcp '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq -r '.result.tools[].name'
+          mcp '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"check_wallet_approvals","arguments":{"address":"0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045","chain":"ethereum"}}}' | tee out.json; echo
+          jq -e '(.result.isError | not) and (.result.content[0].text | test("^(SAFE|CAUTION|RISK):"))' out.json
