@@ -394,18 +394,24 @@ app.all('/mcp', async (req, res) => {
 // resource-server (not a facilitator — this app sells resources, it doesn't
 // verify/settle payments for others) publishing its x402 capability
 // out-of-band so clients/indexers can discover it without prior config.
+// x402scan and similar indexers read {version: 1, resources: [url, ...]};
+// methods, prices and schemas come from /openapi.json (x-payment-info).
+const PUBLIC_ORIGIN = 'https://smartcontractexplainer.onrender.com';
 const X402_WELL_KNOWN_MANIFEST = {
+  version: 1,
+  resources: [`${PUBLIC_ORIGIN}/api/check-wallet`, `${PUBLIC_ORIGIN}/api/explain`],
   x402Version: 2,
   kind: 'resource-server',
   name: 'PlainText — wallet approval translator',
   description: "Checks a wallet's token/NFT approvals via GoPlus and explains risk in plain language.",
-  resources: [
-    { url: 'https://smartcontractexplainer.onrender.com/api/check-wallet', method: 'POST', description: 'Explain wallet token approvals in plain language' },
-    { url: 'https://smartcontractexplainer.onrender.com/api/explain', method: 'POST', description: 'Explain a pasted approval payload in plain language' }
+  endpoints: [
+    { url: `${PUBLIC_ORIGIN}/api/check-wallet`, method: 'POST', description: 'Explain wallet token approvals in plain language' },
+    { url: `${PUBLIC_ORIGIN}/api/explain`, method: 'POST', description: 'Explain a pasted approval payload in plain language' }
   ],
-  docs: 'https://smartcontractexplainer.onrender.com/openapi.json',
+  openapi: `${PUBLIC_ORIGIN}/openapi.json`,
+  docs: `${PUBLIC_ORIGIN}/openapi.json`,
   contact: 'frits.zwager@gmail.com',
-  updated: '2026-09-21T00:00:00Z'
+  updated: '2026-09-23T00:00:00Z'
 };
 
 app.get('/.well-known/x402', (req, res) => res.json(X402_WELL_KNOWN_MANIFEST));
