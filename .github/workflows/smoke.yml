@@ -40,7 +40,9 @@ jobs:
       - name: Free MCP wallet check (GoPlus + Claude)
         run: |
           mcp() {
-            curl -sf -X POST "$SITE/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d "$1"
+            # The answer is JSON or an event stream ("data: {...}"): accept both.
+            curl -sf -X POST "$SITE/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d "$1" \
+              | sed -n 's/^data: //p; /^{/p'
           }
           mcp '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq -r '.result.tools[].name'
           mcp '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"check_wallet_approvals","arguments":{"address":"0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045","chain":"ethereum"}}}' | tee out.json; echo
