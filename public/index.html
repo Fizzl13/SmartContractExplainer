@@ -86,6 +86,11 @@
   .modal-close-btn { background: transparent; border: 1px solid var(--line); color: var(--ink-soft); }
   .modal-body { color: var(--ink-soft); line-height: 1.6; }
   .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .modal-body p { margin: 0 0 12px; }
+  .modal-body code { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; overflow-wrap: anywhere; }
+  .pay-note { background: var(--warn-bg); color: var(--ink); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; line-height: 1.55; }
+  .pay-note ul { margin: 8px 0; padding-left: 20px; }
+  .pay-alt { font-size: 12.5px; margin-top: 12px !important; }
 
   .scenarios { display: grid; gap: 10px; margin-bottom: 24px; }
   .scenario-btn {
@@ -218,14 +223,23 @@
 <div class="modal-backdrop" id="payModal">
   <div class="modal-card">
     <div class="modal-header">
-      <h2 class="modal-title">Pay & explain</h2>
+      <h2 class="modal-title" id="payTitle">Pay & explain</h2>
       <button type="button" class="modal-close-btn" id="closePayModalBtn">Close</button>
     </div>
     <div class="modal-body">
-      This check costs <strong>$0.10</strong> in USDC on Base. Connect a wallet, approve the x402 payment, and we’ll explain the wallet approvals in plain language.
+      <p class="pay-line">This costs <strong id="payPrice">$0.10</strong> in USDC on Base. You sign one payment of exactly this amount to PlainText's payout wallet <code id="payTo">…</code>.</p>
+      <div class="pay-note">
+        <strong>About the MetaMask warning.</strong> MetaMask's security check (Blockaid) may say "This is a deceptive request", because the payout wallet is a regular wallet it doesn't recognise yet. Before you confirm, check two things in MetaMask:
+        <ul>
+          <li><em>To</em> is <code id="payToShort">…</code></li>
+          <li><em>Value</em> is <code id="payValue">100000</code> (<span id="payValueUsd">$0.10</span>; USDC has 6 decimals)</li>
+        </ul>
+        The signature allows this one transfer only. It can't move anything else from your wallet.
+      </div>
+      <p class="pay-alt">Rather not? The free "Try a sample" tab works without a wallet.</p>
     </div>
     <div class="modal-actions">
-      <button type="button" class="pay-now-btn" id="payNowBtn">Pay $0.10</button>
+      <button type="button" class="pay-now-btn" id="payNowBtn">Continue to wallet</button>
     </div>
   </div>
 </div>
@@ -261,8 +275,23 @@ function setWalletStatus(message) {
   walletStatus.textContent = message;
 }
 
-function openPayModal() {
+// The payment about to be made: { url, body, title, run }. The window shows the
+// exact price and payout wallet (read from the 402 challenge) before the
+// wallet opens, and explains the MetaMask security notice.
+let pendingPayment = null;
+
+async function openPayModal(payment) {
+  pendingPayment = payment;
+  document.getElementById('payTitle').textContent = payment.title;
   payModal.classList.add('visible');
+  const need = await baseRequirement(payment.url, payment.body);
+  if (!need || pendingPayment !== payment) return;
+  const to = need.payTo || '';
+  document.getElementById('payPrice').textContent = usd(need.amount);
+  document.getElementById('payTo').textContent = to;
+  document.getElementById('payToShort').textContent = to ? `${to.slice(0, 6)}…${to.slice(-4)}` : '…';
+  document.getElementById('payValue').textContent = String(need.amount);
+  document.getElementById('payValueUsd').textContent = usd(need.amount);
 }
 
 function closePayModal() {
@@ -300,8 +329,9 @@ connectWalletBtn.onclick = connectWallet;
 disconnectWalletBtn.onclick = disconnectWallet;
 closePayModalBtn.onclick = closePayModal;
 payNowBtn.onclick = async () => {
+  const payment = pendingPayment;
   closePayModal();
-  await performWalletCheck();
+  if (payment) await payment.run();
 };
 
 async function loadX402Libraries() {
@@ -384,7 +414,7 @@ async function baseRequirement(url, body) {
     if (res.status !== 402 || !header) return null;
     const challenge = JSON.parse(atob(header));
     const option = (challenge.accepts || []).find((a) => a.network === BASE_NETWORK);
-    return option ? { amount: BigInt(option.amount), asset: option.asset } : null;
+    return option ? { amount: BigInt(option.amount), asset: option.asset, payTo: option.payTo } : null;
   } catch {
     return null;
   }
@@ -500,7 +530,9 @@ checkWalletBtn.onclick = () => {
     return;
   }
 
-  openPayModal();
+  const chain = document.getElementById('chainSelect').value;
+  const kind = document.getElementById('kindSelect').value;
+  openPayModal({ url: '/api/check-wallet', body: { address, chain, kind }, title: 'Pay & check', run: performWalletCheck });
 };
 
 function renderVerdict(el, verdict) {
@@ -518,7 +550,7 @@ function renderVerdict(el, verdict) {
 const pasteBtn = document.getElementById('pasteBtn');
 const pasteError = document.getElementById('pasteError');
 
-pasteBtn.onclick = async () => {
+pasteBtn.onclick = () => {
   const raw = document.getElementById('pasteInput').value.trim();
   pasteError.style.display = 'none';
   if (!raw) {
@@ -534,7 +566,10 @@ pasteBtn.onclick = async () => {
   // JSON stays structured; anything else is sent as text.
   let data;
   try { data = JSON.parse(raw); } catch { data = raw; }
+  openPayModal({ url: '/api/explain', body: { data }, title: 'Pay & explain', run: () => explainPasted(data) });
+};
 
+async function explainPasted(data) {
   pasteBtn.disabled = true;
   pasteBtn.textContent = 'Waiting for payment...';
   document.getElementById('pasteStage').style.display = 'none';
@@ -550,7 +585,7 @@ pasteBtn.onclick = async () => {
     pasteBtn.disabled = false;
     pasteBtn.textContent = 'Explain for $0.05 →';
   }
-};
+}
 
 // ---- Demo scenarios ----
 const scenarios = [
