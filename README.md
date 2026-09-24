@@ -3,11 +3,17 @@
 A small Node.js app that looks up a wallet's token/NFT approvals via the
 GoPlus Security API and asks Claude to explain them in plain language.
 
+[![PlainText in a minute](https://raw.githubusercontent.com/Fizzl13/SmartContractExplainer/explainer-video/poster.jpg)](https://smartcontractexplainer.onrender.com/media/explainer.mp4)
+
+▶ [Watch the 1-minute explainer](https://smartcontractexplainer.onrender.com/media/explainer.mp4) · Live: https://smartcontractexplainer.onrender.com
+
 ## Project structure
 
 ```
 plaintext-wallet/
 ├── server.js          Express backend (GoPlus + Anthropic calls)
+├── media.js           Serves the explainer video from the explainer-video branch
+├── media/explainer/   Script and pipeline for the explainer video
 ├── package.json
 ├── render.yaml         Render deploy config (optional, see below)
 ├── .env.example         Copy to .env for local dev
