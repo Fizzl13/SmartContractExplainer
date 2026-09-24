@@ -141,6 +141,15 @@ if (x402PayTo) {
   const serviceMetadata = { serviceName: 'PlainText', tags: ['wallet-security', 'approvals', 'crypto', 'explainer'] };
 
   app.use(mirrorChallengeIntoBody);
+  // Refuse oversized payloads before the paywall, so nobody pays for a request
+  // that cannot be served. An empty body still gets the 402 (discovery probes).
+  app.post('/api/explain', (req, res, next) => {
+    const data = req.body && req.body.data;
+    if (data !== undefined && JSON.stringify(data).length > 5000) {
+      return res.status(413).json({ error: 'Payload too large (max 5000 characters). Nothing was charged.' });
+    }
+    next();
+  });
   const acceptsFor = (price) => [
     { scheme: 'exact', price, network: x402Caip2Network, payTo: x402PayTo },
     ...(x402PayToSolana ? [{ scheme: 'exact', price, network: x402SolanaNetwork, payTo: x402PayToSolana }] : [])
