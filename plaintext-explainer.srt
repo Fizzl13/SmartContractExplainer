@@ -1,0 +1,44 @@
+1
+00:00:01,794 --> 00:00:08,813
+One signature can hand a stranger your entire wallet. And the pop-up asking for it is written in code, not English.
+
+2
+00:00:09,268 --> 00:00:10,847
+PlainText reads it for you.
+
+3
+00:00:11,301 --> 00:00:18,213
+Here's a common trap: an unlimited approval, to a contract nobody has verified, created just four days ago.
+
+4
+00:00:18,668 --> 00:00:20,951
+One click, and you get it in plain English.
+
+5
+00:00:23,997 --> 00:00:30,802
+Risky. Whoever controls that contract could move all of your USDC, at any time, until you revoke it.
+
+6
+00:00:31,259 --> 00:00:35,910
+Compare that with a limited approval to Uniswap, that expires in thirty minutes.
+
+7
+00:00:37,894 --> 00:00:41,393
+Likely safe. Same kind of pop-up, a very different risk.
+
+8
+00:00:43,035 --> 00:00:49,158
+For your own wallet, paste your address, pick a chain, and PlainText checks every approval you've ever given.
+
+9
+00:00:49,635 --> 00:00:56,675
+A full check costs ten cents in USDC, paid per check. No account, no subscription, and nothing is stored.
+
+10
+00:00:57,161 --> 00:01:02,836
+AI agents can use it too: they pay per call with x402, on Base or Solana.
+
+11
+00:01:03,313 --> 00:01:06,022
+PlainText. Before you sign, know what you're signing.
+
