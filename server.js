@@ -10,6 +10,8 @@ const { declareDiscoveryExtension } = require('@x402/extensions/bazaar');
 const { McpServer, createMcpHandler } = require('@modelcontextprotocol/server');
 const { z } = require('zod/v4');
 const { createMediaCache } = require('./media');
+const { createUsageLog } = require('./usage-log');
+const { describePlainTextCall } = require('./usage');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,6 +21,10 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', true);
 
 app.use(express.json());
+
+// Usage log: every call with what was filled in, for the dashboard at
+// x402-doctor.onrender.com/admin/usage. Does nothing without USAGE_LOG_TOKEN.
+app.use(createUsageLog({ service: 'plaintext' }).middleware(describePlainTextCall));
 
 // x402 v2 identifies networks by CAIP-2 chain id rather than a network name.
 const CAIP2_NETWORKS = {
