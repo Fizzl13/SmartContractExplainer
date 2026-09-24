@@ -22,6 +22,19 @@ jobs:
           curl -sf "$SITE/api/health"; echo
           curl -sf "$SITE/openapi.json" | jq -r '.openapi, (.paths | keys[])'
           curl -sf "$SITE/.well-known/x402" | jq -c .
+      - name: Explainer video served
+        run: |
+          curl -sf "$SITE/" | grep -q '/media/explainer.mp4'
+          # A byte-range request, the way iOS Safari fetches video. Right after a
+          # restart the file may still be downloading (302 to the raw file): retry.
+          for i in 1 2 3 4 5 6; do
+            got=$(curl -s -r 0-1023 -o /dev/null -w '%{http_code} %{content_type}' "$SITE/media/explainer.mp4")
+            echo "$got"
+            case "$got" in "206 video/mp4"*) break ;; esac
+            sleep 10
+          done
+          case "$got" in "206 video/mp4"*) ;; *) echo "video not served"; exit 1 ;; esac
+          curl -sfL "$SITE/media/explainer.jpg" -o /dev/null
       - name: Paid routes answer 402 with Base and Solana options
         run: |
           for route in check-wallet explain; do

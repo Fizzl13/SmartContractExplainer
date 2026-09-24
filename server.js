@@ -9,6 +9,7 @@ const { createFacilitatorConfig } = require('@coinbase/x402');
 const { declareDiscoveryExtension } = require('@x402/extensions/bazaar');
 const { McpServer, createMcpHandler } = require('@modelcontextprotocol/server');
 const { z } = require('zod/v4');
+const { createMediaCache } = require('./media');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -169,6 +170,11 @@ if (x402PayTo) {
 }
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// The explainer video, poster and captions, served from the explainer-video
+// branch (see media.js).
+const media = createMediaCache();
+app.get('/media/:name', media.handler);
 
 const GOPLUS_BASE = 'https://api.gopluslabs.io/api/v2';
 
@@ -517,5 +523,6 @@ app.get('/.well-known/x402', (req, res) => res.json(X402_WELL_KNOWN_MANIFEST));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
+  media.warm();
   console.log(`PlainText server running on port ${PORT}`);
 });
