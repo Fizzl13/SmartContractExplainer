@@ -355,15 +355,69 @@ async function ensureX402Wallet(x402Libs) {
   return { provider, account, walletClient, base };
 }
 
+const BASE_NETWORK = 'eip155:8453';
+const usd = (units) => `$${(Number(units) / 1e6).toFixed(2)}`;
+
+// What the endpoint asks for on Base (amount in USDC units + token contract),
+// read from its 402 challenge before anything is signed. Null if unreadable.
+async function baseRequirement(url, body) {
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const header = res.headers.get('payment-required');
+    if (res.status !== 402 || !header) return null;
+    const challenge = JSON.parse(atob(header));
+    const option = (challenge.accepts || []).find((a) => a.network === BASE_NETWORK);
+    return option ? { amount: BigInt(option.amount), asset: option.asset } : null;
+  } catch {
+    return null;
+  }
+}
+
+// USDC balance of the connected wallet on Base (the wallet is already on Base here).
+async function usdcBalance(provider, asset, owner) {
+  const data = '0x70a08231' + owner.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+  const result = await provider.request({ method: 'eth_call', params: [{ to: asset, data }, 'latest'] });
+  return BigInt(result);
+}
+
+// Payment errors in plain language. Facilitators report a wallet without
+// enough USDC as "invalid_payload: ... execution reverted".
+function paymentErrorMessage(err, fallbackErrorMessage, need) {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  const price = need ? usd(need.amount) : 'the price';
+  if (/user (rejected|denied)|rejected the request|denied transaction|cancel/i.test(raw)) {
+    return 'You cancelled the signature in your wallet. Nothing was paid.';
+  }
+  if (/execution reverted|insufficient|exceeds balance|invalid_payload|invalid_exact_evm_payload/i.test(raw)) {
+    return `The payment was declined before any money moved. Most likely this wallet has less than ${price} in USDC on Base. Add USDC on Base and try again.`;
+  }
+  if (/chain|network/i.test(raw) && /switch|unrecognized|unsupported/i.test(raw)) {
+    return 'Your wallet could not switch to the Base network. Switch to Base in your wallet and try again.';
+  }
+  return raw ? `${fallbackErrorMessage} (${raw})` : fallbackErrorMessage;
+}
+
 async function payForRequest(url, body, fallbackErrorMessage) {
   const x402Libs = await loadX402Libraries();
   const { wrapFetchWithPayment, x402Client, ExactEvmScheme } = x402Libs;
-  const { walletClient } = await ensureX402Wallet(x402Libs);
+  const { provider, walletClient } = await ensureX402Wallet(x402Libs);
+  const owner = walletClient.account.address;
+
+  // Check the balance first, so an empty wallet gets a clear message instead
+  // of a signature request that the facilitator will reject.
+  const need = await baseRequirement(url, body);
+  if (need) {
+    let balance = null;
+    try { balance = await usdcBalance(provider, need.asset, owner); } catch { /* unknown: let the payment decide */ }
+    if (balance !== null && balance < need.amount) {
+      throw new Error(`This check costs ${usd(need.amount)} in USDC on Base, and this wallet has ${usd(balance)}. Add USDC on Base to ${owner.slice(0, 6)}...${owner.slice(-4)} and try again. Nothing was paid.`);
+    }
+  }
 
   // ClientEvmSigner shape expected by @x402/evm: { address, signTypedData(message) }.
   // The injected wallet already has an account bound, so signTypedData needs no extra args.
   const signer = {
-    address: walletClient.account.address,
+    address: owner,
     signTypedData: (typedData) => walletClient.signTypedData(typedData)
   };
 
@@ -371,16 +425,20 @@ async function payForRequest(url, body, fallbackErrorMessage) {
   client.register('eip155:*', new ExactEvmScheme(signer));
   const fetchWithPay = wrapFetchWithPayment(fetch, client);
 
-  const res = await fetchWithPay(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  let res;
+  try {
+    res = await fetchWithPay(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch (err) {
+    throw new Error(paymentErrorMessage(err, fallbackErrorMessage, need));
+  }
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const detail = data.error || data.message;
-    throw new Error(detail ? `${fallbackErrorMessage} (${detail})` : fallbackErrorMessage);
+    throw new Error(paymentErrorMessage(data.error || data.message || '', fallbackErrorMessage, need));
   }
   return data;
 }
