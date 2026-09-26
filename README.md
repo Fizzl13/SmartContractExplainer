@@ -1,5 +1,7 @@
 # PlainText — wallet approval translator
 
+> **Moving:** the paid wallet approval check now lives in [presign-guard](https://github.com/Fizzl13/presign-guard) as `GET /v1/approvals?chain=…&address=…` ($0.02 USDC on Base or Solana, a verdict per approval and the ones to revoke, also as the MCP tool `wallet_approvals`). `/api/explain` overlaps with presign-guard's `POST /v1/check/explain`. PlainText's paid routes keep working for now.
+
 A small Node.js app that looks up a wallet's token/NFT approvals via the
 GoPlus Security API and asks Claude to explain them in plain language.
 
