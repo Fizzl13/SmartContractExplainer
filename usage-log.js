@@ -4,10 +4,13 @@
 // The same file is copied into each Fizzl service. It needs two settings:
 //   USAGE_LOG_TOKEN  fine-grained GitHub token, Contents read/write on the log repo only
 //   USAGE_LOG_REPO   owner/name of the log repo (default Fizzl13/usage-log)
+//   USAGE_LOG_SALT   optional secret for the visitor code (default: the token)
 // Without a token it does nothing. Writing never delays or breaks a request:
 // events are queued and flushed in the background, one commit per flush.
 
 'use strict';
+
+const crypto = require('node:crypto');
 
 const DEFAULT_REPO = 'Fizzl13/usage-log';
 const API = 'https://api.github.com';
@@ -68,9 +71,31 @@ function paymentOf(req, res) {
   };
 }
 
+// Who is calling, in a few words and without personal data: "browser" for a
+// web browser, otherwise the first product token of the User-Agent (e.g.
+// "SmitheryBot/1.0", "python-requests/2.32", "node"). No IP addresses.
+function agentOf(userAgent) {
+  const ua = String(userAgent || '').trim();
+  if (!ua) return 'none';
+  const bot = /([A-Za-z0-9._-]*(?:bot|crawler|spider|scan|monitor)[A-Za-z0-9._-]*)(?:\/[\w.-]+)?/i.exec(ua);
+  if (bot) return clip(bot[0], 60);
+  if (/^Mozilla\//.test(ua) && /(Chrome|Safari|Firefox|Edg)\//.test(ua)) return 'browser';
+  return clip(ua.split(/[\s;(]/)[0] || ua, 60);
+}
+
+// A short, stable code per caller IP, so repeat visitors can be told apart
+// without keeping their address: HMAC-SHA256 with a secret, cut to 12 hex
+// characters. Without the secret the code can't be turned back into an IP.
+function visitorOf(ip, secret) {
+  if (!ip || !secret) return undefined;
+  const address = String(ip).replace(/^::ffff:/, '');
+  return crypto.createHmac('sha256', secret).update(address).digest('hex').slice(0, 12);
+}
+
 function createUsageLog({ service, env = process.env, fetchFn = globalThis.fetch, now = () => new Date(), log = console } = {}) {
   const token = env.USAGE_LOG_TOKEN;
   const repo = env.USAGE_LOG_REPO || DEFAULT_REPO;
+  const visitorSecret = env.USAGE_LOG_SALT || token;
   const queue = [];
   let flushing = null;
   let warned = false;
@@ -146,7 +171,8 @@ function createUsageLog({ service, env = process.env, fetchFn = globalThis.fetch
 
   // Express middleware. describe(req, res, body) returns { route, input, result, via, payment? }
   // for calls worth logging, or null to skip (static files, health, probes).
-  // 402 challenges and other failed payments are not calls and are skipped.
+  // A 402 is logged as a quote (the caller saw the price), with payment_failed
+  // when the request did carry a payment that was refused.
   function middleware(describe) {
     return (req, res, next) => {
       if (req.method === 'OPTIONS' || req.method === 'HEAD') return next();
@@ -163,7 +189,10 @@ function createUsageLog({ service, env = process.env, fetchFn = globalThis.fetch
       let size = 0;
       const keep = (chunk, encoding) => {
         if (!chunk || size > 65536 || typeof chunk === 'function') return;
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), typeof encoding === 'string' ? encoding : 'utf8');
+        // The MCP transport writes Uint8Arrays, not Buffers: String() on those gives "123,34,…".
+        const buf = Buffer.isBuffer(chunk) ? chunk
+          : chunk instanceof Uint8Array ? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+          : Buffer.from(String(chunk), typeof encoding === 'string' ? encoding : 'utf8');
         size += buf.length;
         if (size <= 65536) chunks.push(buf);
       };
@@ -172,12 +201,17 @@ function createUsageLog({ service, env = process.env, fetchFn = globalThis.fetch
       res.write = (chunk, ...rest) => { keep(chunk, rest[0]); return write(chunk, ...rest); };
       res.end = (chunk, ...rest) => { keep(chunk, rest[0]); return end(chunk, ...rest); };
       res.on('finish', () => {
-        if (res.statusCode === 402) return;
+        const quote = res.statusCode === 402;
         if (body === undefined && chunks.length) {
+          const text = Buffer.concat(chunks).toString('utf8');
           try {
-            body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            body = JSON.parse(text);
           } catch {
-            // not JSON
+            // An MCP reply sent as an event stream: the JSON is on the last "data:" line.
+            const data = text.match(/^data: ?(.*)$/gm);
+            if (data) {
+              try { body = JSON.parse(data[data.length - 1].replace(/^data: ?/, '')); } catch { /* not JSON */ }
+            }
           }
         }
         let described;
@@ -188,7 +222,8 @@ function createUsageLog({ service, env = process.env, fetchFn = globalThis.fetch
         }
         if (!described) return;
         // describe() may supply the payment itself (MCP carries it in _meta).
-        const payment = described.payment !== undefined ? described.payment : paymentOf(req, res);
+        const payment = quote ? null : described.payment !== undefined ? described.payment : paymentOf(req, res);
+        const offered = Boolean(req.headers['payment-signature'] || req.headers['x-payment']);
         record({
           route: described.route,
           via: described.via || 'http',
@@ -196,8 +231,11 @@ function createUsageLog({ service, env = process.env, fetchFn = globalThis.fetch
           ms: Date.now() - started,
           paid: Boolean(payment),
           ...(payment || {}),
+          ...(quote ? { quote: true, ...(offered ? { payment_failed: true } : {}) } : {}),
+          agent: agentOf(req.headers['user-agent']),
+          visitor: visitorOf(req.ip || (req.socket && req.socket.remoteAddress), visitorSecret),
           input: described.input,
-          result: described.result,
+          result: quote ? undefined : described.result,
         });
       });
       next();
@@ -232,4 +270,4 @@ function mcpPayment(requestBody, responseBody) {
   };
 }
 
-module.exports = { createUsageLog, paymentOf, mcpToolCall, mcpPayment, clip };
+module.exports = { createUsageLog, paymentOf, mcpToolCall, mcpPayment, clip, agentOf, visitorOf };
