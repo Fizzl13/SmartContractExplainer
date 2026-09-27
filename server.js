@@ -12,13 +12,15 @@ const { z } = require('zod/v4');
 const { createMediaCache } = require('./media');
 const { createUsageLog } = require('./usage-log');
 const { describePlainTextCall } = require('./usage');
+const { trustProxyHops } = require('./proxy');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Render sits behind a proxy; without this, req.ip is Render's internal
-// address for every request, which would break per-caller MCP rate limiting.
-app.set('trust proxy', true);
+// Render sits behind three proxies; see proxy.js. The count matters: too few and
+// req.ip is Render's address for everyone, too many (true) and the caller can
+// pick their own req.ip with an X-Forwarded-For header.
+app.set('trust proxy', trustProxyHops());
 
 app.use(express.json());
 
