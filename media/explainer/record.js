@@ -14,7 +14,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const OUT = process.env.OUT || path.join(__dirname, 'out');
-const SITE = (process.env.SITE_URL || 'https://smartcontractexplainer.onrender.com').replace(/\/$/, '');
+const SITE = (process.env.SITE_URL || 'https://plaintext.fizzl.eu').replace(/\/$/, '');
 // A well-known public contract address, so no personal wallet is shown.
 const SAMPLE_ADDRESS = '0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD';
 const W = 1920;
@@ -26,18 +26,25 @@ const durations = JSON.parse(fs.readFileSync(path.join(OUT, 'durations.json'), '
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-const FONTS = '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;600&display=swap" rel="stylesheet">';
+// Load a generated page and wait for its web fonts, so no frame shows a fallback font.
+async function setPage(page, html, opts = {}) {
+  await page.setContent(html, opts);
+  await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+}
+
+const FONTS = '';
 const THEME = `
-  :root { --paper:#f4efe6; --ink:#1c1a17; --soft:#6b6459; --line:#d8d0c2; --accent:#2f4b3c; --mono-bg:#211f1c; --mono:#e8e2d4; --safe:#7fbf8f; --warn:#d9a54a; }
-  html, body { margin:0; height:100%; background:var(--paper); color:var(--ink); font-family:Inter,-apple-system,'Segoe UI',sans-serif; }
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  :root { --paper:#020708; --ink:#f4f8f7; --soft:#a8b5b2; --line:rgba(97,245,195,.16); --accent:#61f5c3; --mono-bg:#041212; --mono:#e8f3f0; --safe:#7fbf8f; --warn:#d9a54a; }
+  html, body { margin:0; height:100%; background:var(--paper); color:var(--ink); font-family:'DM Sans',system-ui,sans-serif; }
 `;
 
 function cardHtml({ title, sub, note }) {
   return `<!doctype html><html><head>${FONTS}<style>${THEME}
     body { display:flex; align-items:center; justify-content:center; }
     .c { text-align:center; animation: in .6s ease-out both; padding: 0 120px; }
-    h1 { font-family: Fraunces, serif; font-weight: 500; font-size: 124px; margin: 0 0 24px; letter-spacing: -0.01em; }
-    p { font-family: Fraunces, serif; font-size: 52px; color: var(--soft); margin: 0; }
+    h1 { font-family: 'Space Grotesk','DM Sans',sans-serif; font-weight: 500; font-size: 124px; margin: 0 0 24px; letter-spacing: -0.01em; }
+    p { font-family: 'DM Sans',system-ui,sans-serif; font-size: 52px; color: var(--soft); margin: 0; }
     .note { font-family: 'IBM Plex Mono', monospace; font-size: 32px; margin-top: 44px; color: var(--accent); }
     @keyframes in { from { opacity:0; transform: translateY(24px);} to { opacity:1; transform:none; } }
   </style></head><body><div class="c"><h1>${esc(title)}</h1><p>${esc(sub || '')}</p>${note ? `<p class="note">${esc(note)}</p>` : ''}</div></body></html>`;
@@ -47,7 +54,7 @@ function terminalHtml(lines) {
   return `<!doctype html><html><head>${FONTS}<style>${THEME}
     body { display:flex; align-items:center; justify-content:center; }
     .t { width: 1500px; background: var(--mono-bg); color: var(--mono); border-radius: 18px; padding: 36px 44px; box-shadow: 0 30px 80px rgba(0,0,0,.25); }
-    .bar { display:flex; gap:10px; margin-bottom: 26px; } .bar i { width:16px; height:16px; border-radius:50%; background:#4a453d; display:block; }
+    .bar { display:flex; gap:10px; margin-bottom: 26px; } .bar i { width:16px; height:16px; border-radius:50%; background:#10302b; display:block; }
     .label { color: #a89f8d; font-size: 24px; margin: -8px 0 22px; }
     pre { margin:0; font: 30px/1.55 'IBM Plex Mono', 'DejaVu Sans Mono', monospace; white-space: pre-wrap; }
     .l { opacity: 0; transition: opacity .35s; } .l.on { opacity: 1; }
@@ -67,7 +74,7 @@ async function caption(page, text) {
         el = document.createElement('div');
         el.id = '__cap';
         el.style.cssText = 'position:fixed;left:50%;bottom:48px;transform:translateX(-50%);max-width:1500px;z-index:2147483647;' +
-          'background:rgba(28,26,23,.86);color:#fff;font:600 38px/1.35 Inter,-apple-system,"Segoe UI",sans-serif;' +
+          'background:rgba(2,7,8,.88);border:1px solid rgba(97,245,195,.35);color:#f4f8f7;font:600 38px/1.35 "DM Sans",system-ui,sans-serif;' +
           'padding:14px 28px;border-radius:14px;text-align:center;';
         document.body.appendChild(el);
       }
@@ -151,7 +158,7 @@ async function main() {
   await warmUp();
   const options = process.env.MOCK_DEMO === '1' ? [{ network: 'Base', usd: '0.10' }, { network: 'Solana', usd: '0.10' }] : await liveChallenge();
   const terminalLines = [
-    { cls: '', text: '$ POST smartcontractexplainer.onrender.com/api/check-wallet' },
+    { cls: '', text: '$ POST plaintext.fizzl.eu/api/check-wallet' },
     { cls: 'in', text: '← 402 Payment Required, pay with any of:' },
     ...options.map((o) => ({ cls: 'ok', text: `   ${o.network.padEnd(7)} $${o.usd} USDC` })),
     { cls: 'dim', text: '→ agent signs the payment and retries' },
@@ -178,7 +185,7 @@ async function main() {
 
   const scenes = {
     async card(seg) {
-      await page.setContent(cardHtml(seg.card), { waitUntil: 'load' });
+      await setPage(page, cardHtml(seg.card), { waitUntil: 'load' });
     },
     async 'prepare:hook-code'() {
       await page.goto(SITE, { waitUntil: 'networkidle', timeout: 90000 });
@@ -282,7 +289,7 @@ async function main() {
       });
     },
     async 'prepare:agents'() {
-      await page.setContent(terminalHtml(terminalLines), { waitUntil: 'load' });
+      await setPage(page, terminalHtml(terminalLines), { waitUntil: 'load' });
     },
     async agents(seg, ms) {
       for (let i = 0; i < terminalLines.length; i++) {
