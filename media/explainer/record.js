@@ -171,6 +171,12 @@ async function main() {
   await context.addInitScript(() => {
     window.ethereum = { request: () => new Promise(() => {}), on() {}, removeListener() {} };
   });
+  // The site caches its poster for hours; film the one on the explainer-video branch.
+  await context.route('**/media/explainer.jpg', async (route) => {
+    const res = await fetch('https://raw.githubusercontent.com/Fizzl13/SmartContractExplainer/explainer-video/poster.jpg').catch(() => null);
+    if (!res || !res.ok) return route.continue();
+    await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from(await res.arrayBuffer()) });
+  });
   if (process.env.MOCK_DEMO === '1') {
     await context.route('**/api/demo-explain', async (route) => {
       const { data } = JSON.parse(route.request().postData());
@@ -180,6 +186,8 @@ async function main() {
     });
   }
   const page = await context.newPage();
+  // Ink instead of the browser's white blank page while the site loads.
+  await page.setContent('<style>html,body{margin:0;height:100%;background:#020708}</style>');
   const t0 = Date.now();
   const timeline = [];
 
