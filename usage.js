@@ -20,6 +20,7 @@ function describePlainTextCall(req, _res, body) {
   if (req.method === 'POST' && req.path === '/mcp') {
     const call = mcpToolCall(req.body);
     if (!call) return null; // initialize, tools/list
+    if (call.tool === 'feedback') return null; // feedback.js logs it itself, with the full message
     const reply = (Array.isArray(b) ? b : [b]).find((r) => r && r.result) || {};
     const text = reply.result && reply.result.content && reply.result.content[0] && reply.result.content[0].text;
     const verdict = /^(SAFE|CAUTION|RISK):/.exec(String(text || ''));

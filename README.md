@@ -15,6 +15,7 @@ GoPlus Security API and asks Claude to explain them in plain language.
 plaintext-wallet/
 ├── server.js          Express backend (GoPlus + Anthropic calls)
 ├── media.js           Serves the explainer video from the explainer-video branch
+├── feedback.js        POST /feedback and the MCP tool feedback (same file in every Fizzl service)
 ├── media/explainer/   Script and pipeline for the explainer video
 ├── package.json
 ├── render.yaml         Render deploy config (optional, see below)
@@ -22,6 +23,18 @@ plaintext-wallet/
 └── public/
     └── index.html      Frontend (wallet check + demo scenarios)
 ```
+
+## Feedback
+
+Found a bug, or missing something? Send it with `POST /feedback` (free, no payment) or the MCP tool `feedback`:
+
+```bash
+curl -X POST https://plaintext.fizzl.eu/feedback \
+  -H 'content-type: application/json' \
+  -d '{"type": "feature", "message": "Support Solana wallets", "endpoint": "/api/check-wallet"}'
+```
+
+`type` is `bug`, `feature` or `other`; `message` is required (up to 2000 characters); `endpoint` and `contact` are optional. The answer is `202` with an id. At most 10 reports per hour per caller. Reports go to the usage log, and a person reads every one; nothing in a report is run or changed automatically. `GET /feedback` shows the schema.
 
 ## 1. Run it locally first
 

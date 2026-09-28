@@ -11,7 +11,9 @@ const { declareDiscoveryExtension } = require('@x402/extensions/bazaar');
 const { McpServer, createMcpHandler } = require('@modelcontextprotocol/server');
 const { z } = require('zod/v4');
 const { createMediaCache } = require('./media');
-const { createUsageLog } = require('./usage-log');
+const { AsyncLocalStorage } = require('node:async_hooks');
+const { createUsageLog, agentOf } = require('./usage-log');
+const { createFeedback } = require('./feedback');
 const { describePlainTextCall } = require('./usage');
 const { trustProxyHops } = require('./proxy');
 
@@ -27,7 +29,16 @@ app.use(express.json());
 
 // Usage log: every call with what was filled in, for the dashboard at
 // x402-doctor.fizzl.eu/admin/usage. Does nothing without USAGE_LOG_TOKEN.
-app.use(createUsageLog({ service: 'plaintext' }).middleware(describePlainTextCall));
+const usageLog = createUsageLog({ service: 'plaintext' });
+app.use(usageLog.middleware(describePlainTextCall));
+
+// POST /feedback (and the MCP tool feedback): agents report a bug or a missing
+// feature. Free; it lands in the usage log and a person reads it (feedback.js).
+const feedback = createFeedback({ service: 'plaintext', record: usageLog.record, agentOf });
+app.use(feedback.router(express));
+// The MCP handler builds its server without the request: the caller (for the
+// feedback limit) travels along in async context.
+const mcpCaller = new AsyncLocalStorage();
 
 // x402 v2 identifies networks by CAIP-2 chain id rather than a network name.
 const CAIP2_NETWORKS = {
@@ -475,6 +486,16 @@ function buildMcpServer() {
     }
   );
 
+  server.registerTool(
+    feedback.mcpTool.name,
+    {
+      title: feedback.mcpTool.title,
+      description: feedback.mcpTool.description,
+      inputSchema: z.object(feedback.mcpShape(z))
+    },
+    async (args) => feedback.mcpCall(args, mcpCaller.getStore() || {})
+  );
+
   return server;
 }
 
@@ -500,7 +521,7 @@ app.all('/mcp', async (req, res) => {
       init.body = JSON.stringify(req.body);
     }
 
-    const webResponse = await mcpHandler.fetch(new Request(url, init));
+    const webResponse = await mcpCaller.run({ ip: req.ip, userAgent: req.headers['user-agent'] }, () => mcpHandler.fetch(new Request(url, init)));
 
     res.status(webResponse.status);
     webResponse.headers.forEach((value, key) => {
