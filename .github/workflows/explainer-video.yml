@@ -54,7 +54,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Wake the live services
         run: |
-          curl -s -o /dev/null --retry 6 --retry-delay 10 --retry-all-errors --max-time 90 https://smartcontractexplainer.onrender.com/api/health || true
+          curl -s -o /dev/null --retry 6 --retry-delay 10 --retry-all-errors --max-time 90 https://plaintext.fizzl.eu/api/health || true
       - name: Record
         run: node record.js
       - name: Mix and encode
