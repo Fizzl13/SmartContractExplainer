@@ -18,6 +18,9 @@ test('usage log: MCP tool calls with the verdict; handshakes and other routes ar
   assert.deepEqual([out.route, out.via, out.result], ['check_wallet_approvals', 'mcp', { verdict: 'SAFE' }]);
   assert.equal(describePlainTextCall(req('POST', '/mcp', { jsonrpc: '2.0', method: 'tools/list' }), {}, {}), null);
   assert.equal(describePlainTextCall(req('GET', '/api/health'), {}, {}), null);
+  // feedback.js records its own tool calls, with the full message.
+  const fb = { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'feedback', arguments: { message: 'hi there' } } };
+  assert.equal(describePlainTextCall(req('POST', '/mcp', fb), {}, {}), null);
 });
 
 // The middleware itself, with a fake GitHub that keeps the written lines.
