@@ -6,6 +6,7 @@ const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server
 const { ExactEvmScheme } = require('@x402/evm/exact/server');
 const { ExactSvmScheme } = require('@x402/svm/exact/server');
 const { createFacilitatorConfig } = require('@coinbase/x402');
+const { fizzlCors } = require('./fizzl-cors');
 const { declareDiscoveryExtension } = require('@x402/extensions/bazaar');
 const { McpServer, createMcpHandler } = require('@modelcontextprotocol/server');
 const { z } = require('zod/v4');
@@ -401,6 +402,9 @@ function deepEqual(a, b) {
 // for the paid /api/explain endpoint. Also rate-limited since it's free and callable
 // directly (bypassing the UI) by anyone who finds the route.
 const checkDemoRateLimit = createRateLimiter(20, 60 * 60 * 1000);
+
+// The free sample demo may also be called from the live demo on fizzl.eu (browser, CORS).
+app.use('/api/demo-explain', fizzlCors);
 
 app.post('/api/demo-explain', async (req, res) => {
   try {
