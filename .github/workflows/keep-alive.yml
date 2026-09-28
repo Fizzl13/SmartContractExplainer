@@ -14,4 +14,4 @@ jobs:
     steps:
       - name: Ping health endpoint
         run: |
-          curl -sf -m 30 https://smartcontractexplainer.onrender.com/api/health
+          curl -sf -m 30 https://plaintext.fizzl.eu/api/health

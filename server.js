@@ -25,7 +25,7 @@ app.set('trust proxy', trustProxyHops());
 app.use(express.json());
 
 // Usage log: every call with what was filled in, for the dashboard at
-// x402-doctor.onrender.com/admin/usage. Does nothing without USAGE_LOG_TOKEN.
+// x402-doctor.fizzl.eu/admin/usage. Does nothing without USAGE_LOG_TOKEN.
 app.use(createUsageLog({ service: 'plaintext' }).middleware(describePlainTextCall));
 
 // x402 v2 identifies networks by CAIP-2 chain id rather than a network name.
@@ -517,7 +517,7 @@ app.all('/mcp', async (req, res) => {
 // out-of-band so clients/indexers can discover it without prior config.
 // x402scan and similar indexers read {version: 1, resources: [url, ...]};
 // methods, prices and schemas come from /openapi.json (x-payment-info).
-const PUBLIC_ORIGIN = 'https://smartcontractexplainer.onrender.com';
+const PUBLIC_ORIGIN = 'https://plaintext.fizzl.eu';
 const X402_WELL_KNOWN_MANIFEST = {
   version: 1,
   resources: [`${PUBLIC_ORIGIN}/api/check-wallet`, `${PUBLIC_ORIGIN}/api/explain`],

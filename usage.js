@@ -1,5 +1,5 @@
 // What each PlainText call was about, for the usage log (usage-log.js):
-// the dashboard at x402-doctor.onrender.com/admin/usage. Null = not logged.
+// the dashboard at x402-doctor.fizzl.eu/admin/usage. Null = not logged.
 const { mcpToolCall } = require('./usage-log');
 
 // Calls from this site's own page vs. agents and scripts.

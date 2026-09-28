@@ -7,12 +7,12 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://smartcontractexplainer.onrender.com/mcp"
+      "url": "https://plaintext.fizzl.eu/mcp"
     }
   ],
   "repository": {
     "url": "https://github.com/Fizzl13/SmartContractExplainer",
     "source": "github"
   },
-  "websiteUrl": "https://smartcontractexplainer.onrender.com"
+  "websiteUrl": "https://plaintext.fizzl.eu"
 }

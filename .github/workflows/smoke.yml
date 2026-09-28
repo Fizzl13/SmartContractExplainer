@@ -12,7 +12,7 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     env:
-      SITE: https://smartcontractexplainer.onrender.com
+      SITE: https://plaintext.fizzl.eu
     steps:
       - name: Wake up
         run: curl -s -o /dev/null --retry 5 --retry-delay 10 --max-time 90 "$SITE/api/health"

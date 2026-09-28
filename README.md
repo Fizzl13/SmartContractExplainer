@@ -5,9 +5,9 @@
 A small Node.js app that looks up a wallet's token/NFT approvals via the
 GoPlus Security API and asks Claude to explain them in plain language.
 
-[![PlainText in a minute](https://raw.githubusercontent.com/Fizzl13/SmartContractExplainer/explainer-video/poster.jpg)](https://smartcontractexplainer.onrender.com/media/explainer.mp4)
+[![PlainText in a minute](https://raw.githubusercontent.com/Fizzl13/SmartContractExplainer/explainer-video/poster.jpg)](https://plaintext.fizzl.eu/media/explainer.mp4)
 
-▶ [Watch the 1-minute explainer](https://smartcontractexplainer.onrender.com/media/explainer.mp4) · Live: https://smartcontractexplainer.onrender.com
+▶ [Watch the 1-minute explainer](https://plaintext.fizzl.eu/media/explainer.mp4) · Live: https://plaintext.fizzl.eu
 
 ## Project structure
 
