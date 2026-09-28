@@ -3,7 +3,7 @@
   "name": "io.github.Fizzl13/plaintext-wallet-checker",
   "title": "PlainText Wallet Approval Checker",
   "description": "Checks a wallet's token/NFT approvals via GoPlus and explains risk in plain language.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "remotes": [
     {
       "type": "streamable-http",
