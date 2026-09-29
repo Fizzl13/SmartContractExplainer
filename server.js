@@ -562,6 +562,23 @@ const X402_WELL_KNOWN_MANIFEST = {
 
 app.get('/.well-known/x402', (req, res) => res.json(X402_WELL_KNOWN_MANIFEST));
 
+// Agent registration (ERC-8004 format) for the Metaplex Agent Registry on Solana:
+// the document the registered agent points to. registrations gets the asset
+// address once the agent is minted.
+app.get('/.well-known/agent-registration.json', (req, res) => res.json({
+  type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+  name: 'PlainText',
+  description: "Explains crypto wallet approvals in plain language: checks a wallet's token and NFT approvals (via GoPlus) and translates a pasted approval or signature payload into what it lets someone do. Free MCP tools with a rate limit; paid calls over x402 in USDC on Base or Solana.",
+  image: `${PUBLIC_ORIGIN}/og.jpg`,
+  services: [
+    { name: 'web', endpoint: `${PUBLIC_ORIGIN}/` },
+    { name: 'MCP', endpoint: `${PUBLIC_ORIGIN}/mcp`, version: '2025-06-18' }
+  ],
+  active: true,
+  registrations: [],
+  supportedTrust: []
+}));
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
