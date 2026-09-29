@@ -556,7 +556,7 @@ const X402_WELL_KNOWN_MANIFEST = {
   ],
   openapi: `${PUBLIC_ORIGIN}/openapi.json`,
   docs: `${PUBLIC_ORIGIN}/openapi.json`,
-  contact: 'frits.zwager@gmail.com',
+  contact: 'Fizzl13@protonmail.com',
   updated: '2026-09-23T00:00:00Z'
 };
 

@@ -4,7 +4,7 @@
     "title": "PlainText Wallet Approval Checker",
     "version": "1.0.0",
     "description": "Looks up a wallet's live token/NFT approvals via the GoPlus Security API and explains them in plain language for people with no crypto background.",
-    "contact": { "email": "frits.zwager@gmail.com" },
+    "contact": { "email": "Fizzl13@protonmail.com" },
     "x-guidance": "Use POST /api/check-wallet when you have an EVM wallet address and want to know whether its current token/NFT approvals are safe. Example: {\"address\":\"0x6B0F4651eD42893ab58139938175E4a69f175F25\",\"chain\":\"base\",\"kind\":\"token\"} — chain defaults to \"ethereum\" and kind defaults to \"token\" if omitted, so a call can be as small as {\"address\":\"0x...\"}. Use POST /api/explain instead when you already have a specific approval/permission JSON payload (from a scanner, a dapp prompt, etc.) and just want it translated to plain language, without an on-chain lookup. Both return {verdict: SAFE|CAUTION|RISK, explanation: string} so downstream agents can branch on verdict without parsing prose."
   },
   "servers": [{ "url": "https://plaintext.fizzl.eu" }],
