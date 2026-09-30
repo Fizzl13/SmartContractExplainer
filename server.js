@@ -575,6 +575,7 @@ app.get('/.well-known/agent-registration.json', (req, res) => res.json({
     { name: 'MCP', endpoint: `${PUBLIC_ORIGIN}/mcp`, version: '2025-06-18' }
   ],
   active: true,
+  x402Support: true,
   registrations: [],
   supportedTrust: []
 }));
