@@ -6,6 +6,8 @@ const { mcpToolCall } = require('./usage-log');
 const via = (req) => (req.get && req.get('sec-fetch-site') === 'same-origin' ? 'web' : 'api');
 
 function describePlainTextCall(req, _res, body) {
+  // Who reads the EIP-8004 registration (e.g. agent registries such as Metaplex).
+  if (req.method === 'GET' && req.path === '/.well-known/agent-registration.json') return { route: 'agent registration', via: 'discovery', input: {}, result: { status: _res.statusCode } };
   const b = body || {};
   const input = req.body || {};
   if (req.method === 'POST' && req.path === '/api/check-wallet') {
