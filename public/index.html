@@ -126,6 +126,14 @@
   .verdict.risk { background: var(--danger-bg); color: var(--danger); }
   .verdict .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
   .plain-text { font-family: 'Space Grotesk', sans-serif; font-size: 17px; line-height: 1.55; white-space: pre-wrap; }
+  .findings { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+  .findings:empty { display: none; }
+  .finding { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-soft); }
+  .finding.red { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+  .finding.orange { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+  .checked-by { font-size: 12.5px; color: var(--ink-soft); margin: 14px 0 0; }
+  .checked-by:empty { display: none; }
+  .checked-by a { color: var(--accent); }
 
   .moved { background: var(--accent-soft); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; line-height: 1.5; margin: 0 0 22px; }
   .moved a { color: var(--accent); }
@@ -189,6 +197,8 @@
       <div class="result visible" id="walletResult">
         <div class="verdict" id="walletVerdict"><span class="dot"></span><span></span></div>
         <div class="plain-text" id="walletPlainText"></div>
+        <div class="findings" id="walletFindings"></div>
+        <p class="checked-by" id="walletSource"></p>
       </div>
     </div>
   </div>
@@ -220,6 +230,8 @@
       <div class="result visible">
         <div class="verdict" id="pasteVerdict"><span class="dot"></span><span></span></div>
         <div class="plain-text" id="pastePlainText"></div>
+        <div class="findings" id="pasteFindings"></div>
+        <p class="checked-by" id="pasteSource"></p>
       </div>
     </div>
   </div>
@@ -524,6 +536,7 @@ async function performWalletCheck() {
     walletRaw.textContent = JSON.stringify(data.raw, null, 2);
     renderVerdict(walletVerdict, data.verdict);
     walletPlainText.textContent = data.explanation;
+    renderFindings('wallet', data);
     walletStage.style.display = 'block';
   } catch (err) {
     walletError.textContent = err.message;
@@ -566,6 +579,80 @@ function renderVerdict(el, verdict) {
   el.querySelector('span:last-child').textContent = label;
 }
 
+// presign-guard's reason codes as short labels (red and orange first). Codes
+// that only say a source was unavailable are left out; unknown codes are shown
+// as words.
+const FINDING_LABELS = {
+  UNLIMITED_APPROVAL_TO_EOA: 'Unlimited approval to a personal wallet',
+  SIGNATURE_GRANT_TO_EOA: 'Permission to a personal wallet',
+  APPROVAL_TO_WALLET: 'Approval to a personal wallet',
+  UNLIMITED_APPROVAL: 'Unlimited amount',
+  UNLIMITED_APPROVAL_TRUSTED: 'Unlimited amount, known app',
+  UNLIMITED_TRANSFER: 'Can move an unlimited amount',
+  APPROVAL_FOR_ALL: 'All NFTs in the collection',
+  LONG_LIVED_PERMISSION: 'Stays valid for a long time',
+  STALE_APPROVAL: 'Old, unused approval',
+  SANCTIONED_ADDRESS: 'Sanctioned address',
+  SPENDER_MALICIOUS: 'Known malicious address',
+  SPENDER_SUSPICIOUS: 'Suspicious address',
+  SPENDER_UNVERIFIED: 'Unverified contract',
+  UNVERIFIED_CONTRACT: 'Unverified contract',
+  NEW_WALLET_SPENDER: 'Brand-new wallet',
+  RECENTLY_DEPLOYED: 'Recently deployed contract',
+  EIP7702_DELEGATED_WALLET: 'Wallet runs delegated code',
+  MALICIOUS_DELEGATE: 'Malicious delegated code',
+  PHISHING_SITE: 'Known phishing site',
+  LOOKALIKE_SITE: 'Look-alike website',
+  NEW_DOMAIN: 'Very new website',
+  TOKEN_IMPERSONATION: 'Fake token',
+  TOKEN_FLAGGED: 'Flagged token',
+  TOKEN_CANNOT_BUY: 'Token cannot be traded',
+  TOKEN_HIGH_TAX: 'High token tax',
+  TOKEN_ON_TRUST_LIST: 'Well-known token',
+  TOKEN_PAUSABLE: 'Issuer can pause transfers',
+  TOKEN_PAUSED: 'Transfers are paused',
+  TOKEN_BLACKLIST: 'Issuer can freeze accounts',
+  TOKEN_UPGRADEABLE: 'Token contract can be changed',
+  UPGRADEABLE_PROXY: 'Contract can be changed',
+  OFFCHAIN_SIGNATURE: 'Signature only, no transaction',
+  PAYMENT_AUTHORIZATION: 'One fixed payment',
+  REVOKES_APPROVAL: 'Removes an approval'
+};
+const SEVERITY_RANK = { red: 0, orange: 1, info: 2 };
+function findingLabel(r) {
+  if (r.code === 'WALLET_AGE' && r.details && Number.isFinite(r.details.ageDays)) {
+    const d = Math.floor(r.details.ageDays);
+    return d >= 365 ? `Other side active ${Math.floor(d / 365)}+ year${d >= 730 ? 's' : ''}` : `Other side active ${d} day${d === 1 ? '' : 's'}`;
+  }
+  return FINDING_LABELS[r.code] || r.code.toLowerCase().replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+function renderFindings(prefix, data) {
+  const box = document.getElementById(prefix + 'Findings');
+  const source = document.getElementById(prefix + 'Source');
+  box.textContent = '';
+  source.textContent = '';
+  const seen = new Set();
+  (Array.isArray(data.reasons) ? data.reasons : [])
+    .filter((r) => r && r.code && !/_UNAVAILABLE$|_UNKNOWN$|^PARTIAL_SOURCE_DATA$|NO_SECURITY_DATA$/.test(r.code))
+    .sort((a, b) => (SEVERITY_RANK[a.severity] ?? 2) - (SEVERITY_RANK[b.severity] ?? 2))
+    .forEach((r) => {
+      const label = findingLabel(r);
+      if (seen.has(label) || seen.size >= 10) return;
+      seen.add(label);
+      const chip = document.createElement('span');
+      chip.className = 'finding ' + (r.severity === 'red' || r.severity === 'orange' ? r.severity : '');
+      chip.textContent = label;
+      box.appendChild(chip);
+    });
+  if (data.source === 'presign-guard') {
+    source.append('Checked by ');
+    const a = document.createElement('a');
+    a.href = 'https://presign-guard.fizzl.eu';
+    a.textContent = 'presign-guard';
+    source.append(a, data.receipt ? ' · signed receipt' : '');
+  }
+}
+
 // ---- Paste your own (paid, /api/explain) ----
 const pasteBtn = document.getElementById('pasteBtn');
 const pasteError = document.getElementById('pasteError');
@@ -597,6 +684,7 @@ async function explainPasted(data) {
     const result = await payForRequest('/api/explain', { data }, 'Failed to explain this payload.');
     renderVerdict(document.getElementById('pasteVerdict'), result.verdict);
     document.getElementById('pastePlainText').textContent = result.explanation;
+    renderFindings('paste', result);
     document.getElementById('pasteStage').style.display = 'block';
   } catch (err) {
     pasteError.textContent = err.message;
@@ -640,6 +728,7 @@ checkWalletFreeBtn.onclick = async () => {
     walletRaw.textContent = JSON.stringify(data.raw, null, 2);
     renderVerdict(walletVerdict, data.verdict);
     walletPlainText.textContent = data.explanation;
+    renderFindings('wallet', data);
     walletStage.style.display = 'block';
   } catch (err) {
     walletError.textContent = err.message;
@@ -663,6 +752,7 @@ pasteFreeBtn.onclick = async () => {
     const result = await freeCall('/api/free/explain', { data });
     renderVerdict(document.getElementById('pasteVerdict'), result.verdict);
     document.getElementById('pastePlainText').textContent = result.explanation;
+    renderFindings('paste', result);
     document.getElementById('pasteStage').style.display = 'block';
   } catch (err) {
     pasteError.textContent = err.message;

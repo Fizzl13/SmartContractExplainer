@@ -354,7 +354,7 @@ A security check has already decided the verdict for ${subject}: ${verdict}. Do 
 Here are its findings (reason codes with severity, and details):
 ${JSON.stringify(findings, null, 2)}
 
-Write an explanation in English, at most 5 short sentences, no jargon (translate what each finding means in practice instead of naming the codes):
+Write an explanation in English, at most 5 short sentences, no jargon (translate what each finding means in practice instead of naming the codes). Call a token by its tokenSymbol when one is given (for example "your USDC"):
 1. What could happen to the user's money if they go ahead (or, for a wallet, what the risky approvals allow)?
 2. Who is on the other side, and is that party known or new?
 3. Concrete advice that fits the verdict ${verdict}.
@@ -393,7 +393,7 @@ async function getWalletVerdict({ address, chain = 'ethereum', kind = 'token' })
       const explanation = approvals.length
         ? await explainVerdict(verdict, { one_liner: r.one_liner, summary: r.summary, approvals: approvals.slice(0, 20) }, "this wallet's open token approvals")
         : 'This wallet has no active token approvals on this chain right now — there is nothing a third party can currently move on your behalf.';
-      return { verdict, explanation, raw: approvals, source: 'presign-guard', grade: r.grade, one_liner: r.one_liner, revoke_url: r.revokeUrl, ...(r.receipt ? { receipt: r.receipt } : {}) };
+      return { verdict, explanation, raw: approvals, source: 'presign-guard', reasons: trimReasons(r.reasons), grade: r.grade, one_liner: r.one_liner, revoke_url: r.revokeUrl, ...(r.receipt ? { receipt: r.receipt } : {}) };
     } catch (err) {
       console.warn(`[presign] approvals fell back to GoPlus: ${err.message}`);
     }
