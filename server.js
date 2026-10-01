@@ -79,8 +79,8 @@ const x402PayTo = process.env.X402_PAY_TO;
 if (x402PayTo) {
   const x402Network = process.env.X402_NETWORK || 'base-sepolia';
   const x402Caip2Network = CAIP2_NETWORKS[x402Network] || x402Network;
-  const x402CheckPrice = process.env.X402_CHECK_PRICE || '$0.10';
-  const x402ExplainPrice = process.env.X402_EXPLAIN_PRICE || '$0.05';
+  const x402CheckPrice = process.env.X402_CHECK_PRICE || '$0.04';
+  const x402ExplainPrice = process.env.X402_EXPLAIN_PRICE || '$0.03';
   // x402.org/facilitator is testnet-only; on mainnet the fallback is PayAI
   // (production, Base + Solana, no account needed).
   const x402FacilitatorUrl = process.env.X402_FACILITATOR_URL
@@ -300,10 +300,6 @@ async function fetchApprovals({ chainId, address, kind }) {
  * Ask Claude to translate raw approval data into plain language.
  */
 async function translateWithClaude(approvalData) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw Object.assign(new Error('ANTHROPIC_API_KEY is not set on the server.'), { statusCode: 503 });
-  }
-
   const prompt = `You are PlainText, an explainer for people with no crypto background who are about to review a wallet's token/NFT approvals.
 
 Here is the technical approval data from a security scanner:
@@ -317,27 +313,7 @@ Write an explanation in English, at most 5 short sentences, no jargon (never def
 
 Start your answer with exactly one of these three words followed by a colon: "SAFE:", "CAUTION:", or "RISK:" — choose based on the riskiest approval found. If there are no approvals or none look risky, start with "SAFE:".`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      max_tokens: 500,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw Object.assign(new Error(`Anthropic API error: ${res.status} ${errText}`), { statusCode: 502 });
-  }
-
-  const data = await res.json();
-  const text = data.content.map(b => b.text || '').join('\n').trim();
+  const text = await callClaude(prompt);
 
   const match = text.match(/^(SAFE|CAUTION|RISK):\s*([\s\S]*)/i);
   if (match) {
@@ -346,8 +322,82 @@ Start your answer with exactly one of these three words followed by a colon: "SA
   return { verdict: 'CAUTION', explanation: text };
 }
 
+// --- presign-guard as the source of the verdict (presign.js) ---
+// With FIZZL_INTERNAL_KEY set (the same value as on presign-guard, Render only),
+// PlainText asks presign-guard for the verdict and its reasons and only writes the
+// plain-language explanation with Claude; otherwise the old path (GoPlus + Claude).
+const { VERDICT_OF, presignEnabled, askPresign, presignCheckInput, trimReasons } = require('./presign');
+
+async function callClaude(prompt) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw Object.assign(new Error('ANTHROPIC_API_KEY is not set on the server.'), { statusCode: 503 });
+  }
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw Object.assign(new Error(`Anthropic API error: ${res.status} ${errText}`), { statusCode: 502 });
+  }
+  const data = await res.json();
+  return data.content.map((b) => b.text || '').join('\n').trim();
+}
+
+// Plain-language explanation of a verdict that presign-guard already decided:
+// Claude explains, it does not judge.
+async function explainVerdict(verdict, findings, subject) {
+  const prompt = `You are PlainText, an explainer for people with no crypto background.
+
+A security check has already decided the verdict for ${subject}: ${verdict}. Do not change it or second-guess it.
+Here are its findings (reason codes with severity, and details):
+${JSON.stringify(findings, null, 2)}
+
+Write an explanation in English, at most 5 short sentences, no jargon (translate what each finding means in practice instead of naming the codes):
+1. What could happen to the user's money if they go ahead (or, for a wallet, what the risky approvals allow)?
+2. Who is on the other side, and is that party known or new?
+3. Concrete advice that fits the verdict ${verdict}.
+Do not start with the verdict word; it is shown separately.`;
+  return callClaude(prompt);
+}
+
+// Shared by the paid HTTP route and the free MCP tool: explain a pasted payload.
+async function explainPayload(data) {
+  const input = presignEnabled() ? presignCheckInput(data) : null;
+  if (input) {
+    try {
+      const r = await askPresign('POST', '/v1/check', { body: input });
+      const verdict = VERDICT_OF[r.verdict];
+      const reasons = trimReasons(r.reasons);
+      const explanation = await explainVerdict(verdict, { reasons, subject: r.subject }, 'what the user is about to sign');
+      return { verdict, explanation, source: 'presign-guard', reasons, ...(r.receipt ? { receipt: r.receipt } : {}) };
+    } catch (err) {
+      console.warn(`[presign] check fell back to the model: ${err.message}`);
+    }
+  }
+  const { verdict, explanation } = await translateWithClaude(data);
+  return { verdict, explanation, source: 'model' };
+}
+
 // Shared by the paid HTTP route and the free MCP tool below.
 async function getWalletVerdict({ address, chain = 'ethereum', kind = 'token' }) {
+  if (!ADDRESS_RE.test(String(address || ''))) {
+    throw Object.assign(new Error('Invalid wallet address format.'), { statusCode: 400 });
+  }
+  if (presignEnabled() && kind !== 'nft' && /^[a-z]+$/.test(String(chain))) {
+    try {
+      const r = await askPresign('GET', '/v1/approvals', { query: { chain, address } });
+      const verdict = VERDICT_OF[r.verdict];
+      const approvals = Array.isArray(r.approvals) ? r.approvals : [];
+      const explanation = approvals.length
+        ? await explainVerdict(verdict, { one_liner: r.one_liner, summary: r.summary, approvals: approvals.slice(0, 20) }, "this wallet's open token approvals")
+        : 'This wallet has no active token approvals on this chain right now — there is nothing a third party can currently move on your behalf.';
+      return { verdict, explanation, raw: approvals, source: 'presign-guard', grade: r.grade, one_liner: r.one_liner, revoke_url: r.revokeUrl, ...(r.receipt ? { receipt: r.receipt } : {}) };
+    } catch (err) {
+      console.warn(`[presign] approvals fell back to GoPlus: ${err.message}`);
+    }
+  }
   const chainId = CHAINS[chain] || chain; // allow raw chain id too
   const approvalData = await fetchApprovals({ chainId, address, kind });
 
@@ -355,12 +405,13 @@ async function getWalletVerdict({ address, chain = 'ethereum', kind = 'token' })
     return {
       verdict: 'SAFE',
       explanation: 'This wallet has no active token or NFT approvals on this chain right now — there is nothing a third party can currently move on your behalf.',
-      raw: approvalData
+      raw: approvalData,
+      source: 'goplus'
     };
   }
 
   const { verdict, explanation } = await translateWithClaude(approvalData);
-  return { verdict, explanation, raw: approvalData };
+  return { verdict, explanation, raw: approvalData, source: 'goplus' };
 }
 
 // Look up and explain real approvals for a wallet address
@@ -383,8 +434,7 @@ app.post('/api/explain', async (req, res) => {
     const { data } = req.body;
     if (!data) return res.status(400).json({ error: 'data is required' });
 
-    const { verdict, explanation } = await translateWithClaude(data);
-    res.json({ verdict, explanation });
+    res.json(await explainPayload(data));
   } catch (err) {
     console.error(err);
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -446,7 +496,7 @@ function buildMcpServer() {
     'check_wallet_approvals',
     {
       title: 'Check Wallet Approvals',
-      description: "Check an EVM wallet's live token/NFT approvals via GoPlus Security and get a plain-language safety verdict (SAFE, CAUTION, or RISK) with an explanation.",
+      description: "Check an EVM wallet's live token/NFT approvals and get a plain-language safety verdict (SAFE, CAUTION, or RISK) with an explanation. The verdict comes from presign-guard's approval audit (who each spender is, which to revoke).",
       inputSchema: z.object({
         address: z.string().regex(ADDRESS_RE).describe('EVM wallet address to check, e.g. 0x...'),
         chain: z.enum(Object.keys(CHAINS)).optional().describe('Chain to check approvals on (default: ethereum)'),
@@ -478,7 +528,7 @@ function buildMcpServer() {
         if (size > MAX_EXPLAIN_PAYLOAD_CHARS) {
           return { content: [{ type: 'text', text: `Error: payload too large (${size} chars, max ${MAX_EXPLAIN_PAYLOAD_CHARS}).` }], isError: true };
         }
-        const { verdict, explanation } = await translateWithClaude(data);
+        const { verdict, explanation } = await explainPayload(data);
         return { content: [{ type: 'text', text: `${verdict}: ${explanation}` }] };
       } catch (err) {
         return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };

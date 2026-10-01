@@ -145,7 +145,7 @@
     <p>Check a real wallet's approvals, or try a sample scenario — either way, get a plain-language explanation of what each permission actually does.</p>
   </header>
 
-  <p class="moved"><strong>For agents and developers:</strong> the paid wallet check now lives in <a href="https://presign-guard.fizzl.eu">presign-guard</a>: <code>GET /v1/approvals?chain=base&amp;address=…</code>, $0.02 on Base or Solana, with a verdict per approval and the ones to revoke. The paid routes here keep working for now.</p>
+  <p class="moved"><strong>For agents and developers:</strong> the verdicts come from <a href="https://presign-guard.fizzl.eu">presign-guard</a> (the same checks and a signed receipt); PlainText adds the explanation in plain language. If you only need the verdict and reason codes, call presign-guard directly: <code>GET /v1/approvals?chain=base&amp;address=…</code> ($0.02) or <code>POST /v1/check</code> ($0.01).</p>
 
   <div class="tabs">
     <button class="tab active" data-tab="wallet">Check a wallet</button>
@@ -206,9 +206,9 @@
 
   <div class="panel" id="panel-paste">
     <div class="section-label">Approval or permission data</div>
-    <p class="paste-note">Paste what your wallet, a dapp or a security scanner shows you (JSON or plain text). PlainText explains what it lets the other side do. $0.05 in USDC on Base, paid from your wallet.</p>
+    <p class="paste-note">Paste what your wallet, a dapp or a security scanner shows you (JSON or plain text). PlainText explains what it lets the other side do. $0.03 in USDC on Base, paid from your wallet.</p>
     <textarea id="pasteInput" maxlength="5000" spellcheck="false" placeholder='{ "function": "approve", "token": "USDC", "spender": "0x…", "approved_amount": "unlimited" }'></textarea>
-    <button class="check-btn" id="pasteBtn">Explain for $0.05 →</button>
+    <button class="check-btn" id="pasteBtn">Explain for $0.03 →</button>
     <div class="error-box" id="pasteError"></div>
     <div class="stage" id="pasteStage" style="display:none;">
       <div class="result visible">
@@ -241,12 +241,12 @@
       <button type="button" class="modal-close-btn" id="closePayModalBtn">Close</button>
     </div>
     <div class="modal-body">
-      <p class="pay-line">This costs <strong id="payPrice">$0.10</strong> in USDC on Base. You sign one payment of exactly this amount to PlainText's payout wallet <code id="payTo">…</code>.</p>
+      <p class="pay-line">This costs <strong id="payPrice">$0.04</strong> in USDC on Base. You sign one payment of exactly this amount to PlainText's payout wallet <code id="payTo">…</code>.</p>
       <div class="pay-note">
         <strong>About the MetaMask warning.</strong> MetaMask's security check (Blockaid) may say "This is a deceptive request", because the payout wallet is a regular wallet it doesn't recognise yet. Before you confirm, check two things in MetaMask:
         <ul>
           <li><em>To</em> is <code id="payToShort">…</code></li>
-          <li><em>Value</em> is <code id="payValue">100000</code> (<span id="payValueUsd">$0.10</span>; USDC has 6 decimals)</li>
+          <li><em>Value</em> is <code id="payValue">40000</code> (<span id="payValueUsd">$0.04</span>; USDC has 6 decimals)</li>
         </ul>
         The signature allows this one transfer only. It can't move anything else from your wallet.
       </div>
@@ -597,7 +597,7 @@ async function explainPasted(data) {
     pasteError.style.display = 'block';
   } finally {
     pasteBtn.disabled = false;
-    pasteBtn.textContent = 'Explain for $0.05 →';
+    pasteBtn.textContent = 'Explain for $0.03 →';
   }
 }
 

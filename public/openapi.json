@@ -15,7 +15,7 @@
         "summary": "Check a wallet's approvals and explain the risk",
         "tags": ["Wallet"],
         "x-payment-info": {
-          "price": { "mode": "fixed", "currency": "USD", "amount": "0.100000" },
+          "price": { "mode": "fixed", "currency": "USD", "amount": "0.040000" },
           "protocols": ["x402"],
           "networks": ["eip155:8453", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
           "asset": "USDC"
@@ -75,7 +75,7 @@
         "summary": "Generate a plain-language verdict for an approval payload",
         "tags": ["Wallet"],
         "x-payment-info": {
-          "price": { "mode": "fixed", "currency": "USD", "amount": "0.050000" },
+          "price": { "mode": "fixed", "currency": "USD", "amount": "0.030000" },
           "protocols": ["x402"],
           "networks": ["eip155:8453", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
           "asset": "USDC"

@@ -1,6 +1,6 @@
 # PlainText — wallet approval translator
 
-> **Moving:** the paid wallet approval check now lives in [presign-guard](https://github.com/Fizzl13/presign-guard) as `GET /v1/approvals?chain=…&address=…` ($0.02 USDC on Base or Solana, a verdict per approval and the ones to revoke, also as the MCP tool `wallet_approvals`). `/api/explain` overlaps with presign-guard's `POST /v1/check/explain`. PlainText's paid routes keep working for now.
+> **Built on presign-guard:** PlainText's verdicts now come from [presign-guard](https://github.com/Fizzl13/presign-guard) (the same checks, sanctions list, wallet age and signed receipt); PlainText adds the explanation in plain language for people. `POST /api/check-wallet` ($0.04) uses presign-guard's approval audit, `POST /api/explain` ($0.03) its pre-sign check when the payload is a real approval, transaction or typed-data signature (anything else is explained by the model alone, `source: "model"`). Agents that only need the verdict and reason codes can call presign-guard directly ($0.01–$0.02). Needs `FIZZL_INTERNAL_KEY` (the same value on both services, Render only); without it the old path (GoPlus + Claude) runs.
 
 A small Node.js app that looks up a wallet's token/NFT approvals via the
 GoPlus Security API and asks Claude to explain them in plain language.
