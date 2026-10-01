@@ -16,6 +16,12 @@ function describePlainTextCall(req, _res, body) {
   if (req.method === 'POST' && req.path === '/api/explain') {
     return { route: 'explain', via: via(req), input: { data: input.data }, result: { verdict: b.verdict, error: b.error } };
   }
+  if (req.method === 'POST' && req.path === '/api/free/check-wallet') {
+    return { route: 'free check-wallet', via: 'web', input: { address: input.address, chain: input.chain, kind: input.kind }, result: { verdict: b.verdict, error: b.error } };
+  }
+  if (req.method === 'POST' && req.path === '/api/free/explain') {
+    return { route: 'free explain', via: 'web', input: { data: input.data }, result: { verdict: b.verdict, error: b.error } };
+  }
   if (req.method === 'POST' && req.path === '/api/demo-explain') {
     return { route: 'demo', via: 'web', input: { function: input.data && input.data.function }, result: { verdict: b.verdict, error: b.error } };
   }

@@ -81,6 +81,8 @@
   }
   .pay-now-btn { width: 100%; }
   .check-btn:disabled, .translate-btn:disabled, .pay-now-btn:disabled { opacity: 0.5; cursor: default; }
+  .check-btn.secondary { background: transparent; color: inherit; border: 1px solid currentColor; margin-top: 8px; opacity: .85; }
+  .free-note { font-size: 12.5px; opacity: .7; margin: 8px 0 0; }
   .modal-backdrop {
     position: fixed; inset: 0; background: rgba(18, 15, 11, 0.52); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100;
   }
@@ -145,7 +147,7 @@
     <p>Check a real wallet's approvals, or try a sample scenario — either way, get a plain-language explanation of what each permission actually does.</p>
   </header>
 
-  <p class="moved"><strong>For agents and developers:</strong> the paid wallet check now lives in <a href="https://presign-guard.fizzl.eu">presign-guard</a>: <code>GET /v1/approvals?chain=base&amp;address=…</code>, $0.02 on Base or Solana, with a verdict per approval and the ones to revoke. The paid routes here keep working for now.</p>
+  <p class="moved"><strong>For agents and developers:</strong> the verdicts come from <a href="https://presign-guard.fizzl.eu">presign-guard</a> (the same checks and a signed receipt); PlainText adds the explanation in plain language. If you only need the verdict and reason codes, call presign-guard directly: <code>GET /v1/approvals?chain=base&amp;address=…</code> ($0.02) or <code>POST /v1/check</code> ($0.01).</p>
 
   <div class="tabs">
     <button class="tab active" data-tab="wallet">Check a wallet</button>
@@ -172,13 +174,15 @@
       </select>
     </div>
     <div class="wallet-meta">
-      <div class="wallet-status" id="walletStatus">No wallet connected yet. Connect a wallet to pay for the check.</div>
+      <div class="wallet-status" id="walletStatus">No wallet connected. You only need one to pay; the free checks work without.</div>
       <div style="display:flex; gap:8px; align-items:center;">
         <button class="connect-wallet-btn" id="connectWalletBtn" type="button">Connect wallet</button>
         <button class="disconnect-wallet-btn" id="disconnectWalletBtn" type="button">Disconnect</button>
       </div>
     </div>
-    <button class="check-btn" id="checkWalletBtn">Check approvals →</button>
+    <button class="check-btn" id="checkWalletFreeBtn" type="button">Check free →</button>
+    <button class="check-btn secondary" id="checkWalletBtn">Pay with a wallet ($0.04) →</button>
+    <p class="free-note" id="walletFreeNote">3 free checks a day, no wallet needed.</p>
     <div class="error-box" id="walletError"></div>
     <div class="stage" id="walletStage" style="display:none;">
       <div class="raw" id="walletRaw"></div>
@@ -206,9 +210,11 @@
 
   <div class="panel" id="panel-paste">
     <div class="section-label">Approval or permission data</div>
-    <p class="paste-note">Paste what your wallet, a dapp or a security scanner shows you (JSON or plain text). PlainText explains what it lets the other side do. $0.05 in USDC on Base, paid from your wallet.</p>
+    <p class="paste-note">Paste what your wallet, a dapp or a security scanner shows you (JSON or plain text). PlainText explains what it lets the other side do. 3 free checks a day; after that $0.03 in USDC on Base, paid from your wallet.</p>
     <textarea id="pasteInput" maxlength="5000" spellcheck="false" placeholder='{ "function": "approve", "token": "USDC", "spender": "0x…", "approved_amount": "unlimited" }'></textarea>
-    <button class="check-btn" id="pasteBtn">Explain for $0.05 →</button>
+    <button class="check-btn" id="pasteFreeBtn" type="button">Explain free →</button>
+    <button class="check-btn secondary" id="pasteBtn">Pay with a wallet ($0.03) →</button>
+    <p class="free-note" id="pasteFreeNote">3 free checks a day, no wallet needed.</p>
     <div class="error-box" id="pasteError"></div>
     <div class="stage" id="pasteStage" style="display:none;">
       <div class="result visible">
@@ -241,12 +247,12 @@
       <button type="button" class="modal-close-btn" id="closePayModalBtn">Close</button>
     </div>
     <div class="modal-body">
-      <p class="pay-line">This costs <strong id="payPrice">$0.10</strong> in USDC on Base. You sign one payment of exactly this amount to PlainText's payout wallet <code id="payTo">…</code>.</p>
+      <p class="pay-line">This costs <strong id="payPrice">$0.04</strong> in USDC on Base. You sign one payment of exactly this amount to PlainText's payout wallet <code id="payTo">…</code>.</p>
       <div class="pay-note">
         <strong>About the MetaMask warning.</strong> MetaMask's security check (Blockaid) may say "This is a deceptive request", because the payout wallet is a regular wallet it doesn't recognise yet. Before you confirm, check two things in MetaMask:
         <ul>
           <li><em>To</em> is <code id="payToShort">…</code></li>
-          <li><em>Value</em> is <code id="payValue">100000</code> (<span id="payValueUsd">$0.10</span>; USDC has 6 decimals)</li>
+          <li><em>Value</em> is <code id="payValue">40000</code> (<span id="payValueUsd">$0.04</span>; USDC has 6 decimals)</li>
         </ul>
         The signature allows this one transfer only. It can't move anything else from your wallet.
       </div>
@@ -336,7 +342,7 @@ async function connectWallet() {
 
 function disconnectWallet() {
   connectedWallet = null;
-  setWalletStatus('No wallet connected yet. Connect a wallet to pay for the check.');
+  setWalletStatus('No wallet connected. You only need one to pay; the free checks work without.');
 }
 
 connectWalletBtn.onclick = connectWallet;
@@ -524,7 +530,7 @@ async function performWalletCheck() {
     walletError.style.display = 'block';
   } finally {
     checkWalletBtn.disabled = false;
-    checkWalletBtn.textContent = 'Check approvals →';
+    checkWalletBtn.textContent = 'Pay with a wallet ($0.04) →';
   }
 }
 
@@ -597,9 +603,75 @@ async function explainPasted(data) {
     pasteError.style.display = 'block';
   } finally {
     pasteBtn.disabled = false;
-    pasteBtn.textContent = 'Explain for $0.05 →';
+    pasteBtn.textContent = 'Pay with a wallet ($0.03) →';
   }
 }
+
+// ---- Free checks for people (3 a day, /api/free/*) ----
+const checkWalletFreeBtn = document.getElementById('checkWalletFreeBtn');
+const pasteFreeBtn = document.getElementById('pasteFreeBtn');
+function showFreeLeft(left) {
+  const text = left > 0 ? `${left} free check${left === 1 ? '' : 's'} left today, no wallet needed.` : 'No free checks left today. Pay per check with a wallet, or come back tomorrow.';
+  document.getElementById('walletFreeNote').textContent = text;
+  document.getElementById('pasteFreeNote').textContent = text;
+  checkWalletFreeBtn.disabled = left <= 0;
+  pasteFreeBtn.disabled = left <= 0;
+}
+fetch('/api/free/quota').then((r) => r.json()).then((q) => showFreeLeft(q.left)).catch(() => {});
+
+async function freeCall(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (typeof data.free_left === 'number') showFreeLeft(data.free_left);
+  else if (typeof data.left === 'number') showFreeLeft(data.left);
+  if (!res.ok) throw new Error(data.error || 'Something went wrong. Try again.');
+  return data;
+}
+
+checkWalletFreeBtn.onclick = async () => {
+  const address = document.getElementById('walletAddress').value.trim();
+  walletError.style.display = 'none';
+  if (!address) { walletError.textContent = 'Enter a wallet address first.'; walletError.style.display = 'block'; return; }
+  checkWalletFreeBtn.disabled = true;
+  checkWalletFreeBtn.textContent = 'Checking...';
+  walletStage.style.display = 'none';
+  try {
+    const data = await freeCall('/api/free/check-wallet', { address, chain: document.getElementById('chainSelect').value, kind: document.getElementById('kindSelect').value });
+    walletRaw.textContent = JSON.stringify(data.raw, null, 2);
+    renderVerdict(walletVerdict, data.verdict);
+    walletPlainText.textContent = data.explanation;
+    walletStage.style.display = 'block';
+  } catch (err) {
+    walletError.textContent = err.message;
+    walletError.style.display = 'block';
+  } finally {
+    checkWalletFreeBtn.textContent = 'Check free →';
+    if (!/No free checks/.test(document.getElementById('walletFreeNote').textContent)) checkWalletFreeBtn.disabled = false;
+  }
+};
+
+pasteFreeBtn.onclick = async () => {
+  const raw = document.getElementById('pasteInput').value.trim();
+  pasteError.style.display = 'none';
+  if (!raw) { pasteError.textContent = 'Paste the approval or permission data first.'; pasteError.style.display = 'block'; return; }
+  let data;
+  try { data = JSON.parse(raw); } catch { data = raw; }
+  pasteFreeBtn.disabled = true;
+  pasteFreeBtn.textContent = 'Working...';
+  document.getElementById('pasteStage').style.display = 'none';
+  try {
+    const result = await freeCall('/api/free/explain', { data });
+    renderVerdict(document.getElementById('pasteVerdict'), result.verdict);
+    document.getElementById('pastePlainText').textContent = result.explanation;
+    document.getElementById('pasteStage').style.display = 'block';
+  } catch (err) {
+    pasteError.textContent = err.message;
+    pasteError.style.display = 'block';
+  } finally {
+    pasteFreeBtn.textContent = 'Explain free →';
+    if (!/No free checks/.test(document.getElementById('pasteFreeNote').textContent)) pasteFreeBtn.disabled = false;
+  }
+};
 
 // ---- Demo scenarios ----
 const scenarios = [
