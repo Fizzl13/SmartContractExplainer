@@ -441,6 +441,46 @@ app.post('/api/explain', async (req, res) => {
   }
 });
 
+// --- Free checks for people on this site (3 per visitor per day, 150 in all) ---
+// The same answers as the paid routes, for people without an x402 wallet; agents
+// keep paying /api/check-wallet and /api/explain. Not offered to other origins.
+const { createQuota } = require('./free-quota');
+const freeQuota = createQuota({ perVisitor: Number(process.env.FREE_PER_VISITOR) || 3, perDay: Number(process.env.FREE_PER_DAY) || 150 });
+const MAX_FREE_PAYLOAD_CHARS = 2000;
+const freeLimitMessage = (reason) => (reason === 'day'
+  ? "Today's free checks are used up. Try again tomorrow, or pay per check with a wallet."
+  : "You've used your 3 free checks for today. Come back tomorrow, or pay per check with a wallet.");
+
+app.get('/api/free/quota', (req, res) => res.json({ left: freeQuota.left(req.ip), per_day: Number(process.env.FREE_PER_VISITOR) || 3 }));
+
+async function freeRoute(req, res, run) {
+  const taken = freeQuota.take(req.ip);
+  if (!taken.ok) return res.status(429).json({ error: freeLimitMessage(taken.reason), left: 0 });
+  try {
+    const result = await run();
+    res.json({ ...result, free_left: taken.left });
+  } catch (err) {
+    if ((err.statusCode || 500) >= 500) freeQuota.refund(req.ip); // our failure: the check doesn't count
+    console.error(err);
+    res.status(err.statusCode || 500).json({ error: err.message, left: freeQuota.left(req.ip) });
+  }
+}
+
+app.post('/api/free/check-wallet', (req, res) => {
+  const { address, chain = 'ethereum', kind = 'token' } = req.body || {};
+  if (!address) return res.status(400).json({ error: 'address is required' });
+  if (!ADDRESS_RE.test(String(address))) return res.status(400).json({ error: 'Invalid wallet address format.' });
+  return freeRoute(req, res, () => getWalletVerdict({ address, chain, kind }));
+});
+
+app.post('/api/free/explain', (req, res) => {
+  const { data } = req.body || {};
+  if (!data) return res.status(400).json({ error: 'data is required' });
+  const size = JSON.stringify(data).length;
+  if (size > MAX_FREE_PAYLOAD_CHARS) return res.status(400).json({ error: `Too long for a free check (${size} characters, max ${MAX_FREE_PAYLOAD_CHARS}).` });
+  return freeRoute(req, res, () => explainPayload(data));
+});
+
 // Free demo scenarios shown on the "Try a sample" tab, kept in sync with public/index.html.
 // This is a fixed, known set — not a general free-explain backdoor around the x402 paywall.
 const DEMO_SCENARIOS = [
