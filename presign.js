@@ -14,9 +14,9 @@ const presignUrl = (env = process.env) => String(env.PRESIGN_GUARD_URL || 'https
 const presignKey = (env = process.env) => String(env.FIZZL_INTERNAL_KEY || '').trim();
 const presignEnabled = (env = process.env) => presignKey(env).length >= 32;
 
-// A wallet's approval list can take presign-guard up to ~15 s (a heavy GoPlus
+// A wallet's approval list can take presign-guard up to ~35 s (a heavy GoPlus
 // query for busy wallets); a pre-sign check is quicker.
-const TIMEOUT_MS = { '/v1/approvals': 40000 };
+const TIMEOUT_MS = { '/v1/approvals': 60000 };
 const DEFAULT_TIMEOUT_MS = 20000;
 
 async function askPresign(method, route, { query, body } = {}, { env = process.env, fetchFn = globalThis.fetch } = {}) {
