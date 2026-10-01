@@ -14,6 +14,11 @@ const presignUrl = (env = process.env) => String(env.PRESIGN_GUARD_URL || 'https
 const presignKey = (env = process.env) => String(env.FIZZL_INTERNAL_KEY || '').trim();
 const presignEnabled = (env = process.env) => presignKey(env).length >= 32;
 
+// A wallet's approval list can take presign-guard up to ~15 s (a heavy GoPlus
+// query for busy wallets); a pre-sign check is quicker.
+const TIMEOUT_MS = { '/v1/approvals': 40000 };
+const DEFAULT_TIMEOUT_MS = 20000;
+
 async function askPresign(method, route, { query, body } = {}, { env = process.env, fetchFn = globalThis.fetch } = {}) {
   const url = new URL(presignUrl(env) + route);
   for (const [k, v] of Object.entries(query || {})) url.searchParams.set(k, String(v));
@@ -21,7 +26,7 @@ async function askPresign(method, route, { query, body } = {}, { env = process.e
     method,
     headers: { 'x-fizzl-internal': presignKey(env), accept: 'application/json', 'user-agent': 'plaintext/1.0', ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(20000)
+    signal: AbortSignal.timeout(TIMEOUT_MS[route] || DEFAULT_TIMEOUT_MS)
   });
   const json = await res.json().catch(() => null);
   if (!res.ok || !json || !VERDICT_OF[json.verdict]) {
