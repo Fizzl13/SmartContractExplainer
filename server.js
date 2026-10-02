@@ -650,6 +650,8 @@ const X402_WELL_KNOWN_MANIFEST = {
   updated: '2026-09-23T00:00:00Z'
 };
 
+// Instructions an AI agent can read and follow ("Connect to plaintext.fizzl.eu/skill.md").
+app.get('/skill.md', (_req, res) => res.set('cache-control', 'public, max-age=300').type('text/markdown; charset=utf-8').sendFile(path.join(__dirname, 'public', 'skill.md')));
 app.get('/.well-known/x402', (req, res) => res.json(X402_WELL_KNOWN_MANIFEST));
 
 // Agent registration (ERC-8004 format) for the Metaplex Agent Registry on Solana:
