@@ -37,6 +37,8 @@
   body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'DM Sans', -apple-system, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 48px 20px 80px; }
   header { margin-bottom: 36px; }
+  .wallet-link { float: right; font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 7px 12px; text-decoration: none; white-space: nowrap; margin-left: 12px; }
+  .wallet-link:hover, .wallet-link:focus-visible { background: var(--accent-soft); }
   .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink-soft); letter-spacing: 0.02em; margin-bottom: 14px; }
   h1 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: clamp(28px, 6vw, 40px); line-height: 1.12; margin: 0 0 16px; letter-spacing: -0.03em; }
   header p { color: var(--ink-soft); font-size: 15.5px; max-width: 54ch; margin: 0; }
@@ -149,6 +151,7 @@
 </head>
 <body>
 <div class="wrap">
+  <a class="wallet-link" href="https://wallet.fizzl.eu/" title="Fizzl Agent Wallet: spending limits and approvals for your agents">Agent Wallet ↗</a>
   <header>
     <div class="eyebrow">plaintext-wallet · self-hosted</div>
     <h1>Before you sign,<br>know what you're signing.</h1>
