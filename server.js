@@ -159,7 +159,8 @@ if (x402PayTo) {
       example: { verdict: 'RISK', explanation: 'You would let an unverified, days-old address spend all of your USDC, forever.' }
     }
   });
-  const serviceMetadata = { serviceName: 'PlainText', tags: ['wallet-security', 'approvals', 'crypto', 'explainer'] };
+  // The x402 Bazaar indexes serviceName, tags and iconUrl (public/icon.png).
+  const serviceMetadata = { serviceName: 'PlainText', tags: ['wallet-security', 'approvals', 'crypto', 'explainer'], iconUrl: 'https://plaintext.fizzl.eu/icon.png' };
 
   app.use(mirrorChallengeIntoBody);
   // Refuse oversized payloads before the paywall, so nobody pays for a request
@@ -641,6 +642,10 @@ const X402_WELL_KNOWN_MANIFEST = {
   x402Version: 2,
   kind: 'resource-server',
   name: 'PlainText — wallet approval translator',
+  serviceName: 'PlainText',
+  category: 'security',
+  iconUrl: `${PUBLIC_ORIGIN}/icon.png`,
+  tags: ['wallet-security', 'approvals', 'crypto', 'explainer'],
   description: "Checks a wallet's token/NFT approvals via GoPlus and explains risk in plain language.",
   endpoints: [
     { url: `${PUBLIC_ORIGIN}/api/check-wallet`, method: 'POST', description: 'Explain wallet token approvals in plain language' },
