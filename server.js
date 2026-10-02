@@ -16,6 +16,7 @@ const { createUsageLog, agentOf } = require('./usage-log');
 const { createFeedback } = require('./feedback');
 const { describePlainTextCall } = require('./usage');
 const { trustProxyHops } = require('./proxy');
+const { onPublicHost } = require('./public-host');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -175,7 +176,8 @@ if (x402PayTo) {
     ...(x402PayToSolana ? [{ scheme: 'exact', price, network: x402SolanaNetwork, payTo: x402PayToSolana }] : [])
   ];
 
-  app.use(paymentMiddleware({
+  // Challenges (and so the Bazaar listing) name plaintext.fizzl.eu, also when called on the Render address.
+  app.use(onPublicHost('https://plaintext.fizzl.eu', paymentMiddleware({
     'POST /api/check-wallet': {
       accepts: acceptsFor(x402CheckPrice),
       description: "Check an EVM wallet's live token/NFT approvals and get a plain-language verdict (SAFE, CAUTION or RISK) with an explanation",
@@ -190,7 +192,7 @@ if (x402PayTo) {
       ...serviceMetadata,
       extensions: explainDiscovery
     }
-  }, x402Server));
+  }, x402Server)));
 
   const networks = [x402Caip2Network, ...(x402PayToSolana ? [x402SolanaNetwork] : [])].join(' + ');
   console.log(`x402 paywall enabled for /api/check-wallet and /api/explain on ${networks} using facilitator ${usingCdp ? `Coinbase CDP (fallback ${x402FacilitatorUrl})` : x402FacilitatorUrl}`);
