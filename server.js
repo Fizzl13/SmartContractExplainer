@@ -17,7 +17,7 @@ const { createFeedback } = require('./feedback');
 const { describePlainTextCall } = require('./usage');
 const { trustProxyHops } = require('./proxy');
 const { onPublicHost } = require('./public-host');
-const { createMppPay, unlessMppPaid } = require('./mpp-pay');
+const { createMppPay, unlessMppPaid, addMppOffers } = require('./mpp-pay');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -189,7 +189,15 @@ if (x402PayTo) {
       facilitator: facilitators[0]
     })
     : null;
-  if (mpp) app.use(mpp.middleware);
+  if (mpp) {
+    app.use(mpp.middleware);
+    // MPP discovery for MPPScan: public/openapi.json plus the evm offer per paid operation.
+    const spec = addMppOffers(JSON.parse(require('fs').readFileSync(path.join(__dirname, 'public', 'openapi.json'), 'utf8')), {
+      categories: ['security', 'blockchain'],
+      docs: { homepage: 'https://plaintext.fizzl.eu', apiReference: 'https://plaintext.fizzl.eu/openapi.json', llms: 'https://plaintext.fizzl.eu/skill.md' }
+    });
+    app.get('/openapi.json', (_req, res) => res.json(spec));
+  }
 
   // Challenges (and so the Bazaar listing) name plaintext.fizzl.eu, also when called on the Render address.
   app.use(unlessMppPaid(onPublicHost('https://plaintext.fizzl.eu', paymentMiddleware({
