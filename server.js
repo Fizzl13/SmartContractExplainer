@@ -690,7 +690,7 @@ app.get('/.well-known/x402', (req, res) => res.json(X402_WELL_KNOWN_MANIFEST));
 app.get('/.well-known/agent-registration.json', (req, res) => res.json({
   type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
   name: 'PlainText',
-  description: "Explains crypto wallet approvals in plain language: checks a wallet's token and NFT approvals (via GoPlus) and translates a pasted approval or signature payload into what it lets someone do. Free MCP tools with a rate limit; paid calls over x402 in USDC on Base or Solana.",
+  description: "Explains crypto wallet approvals in plain language: checks a wallet's token and NFT approvals (via GoPlus) and translates a pasted approval or signature payload into what it lets someone do. Free MCP tools with a rate limit; paid calls over x402 (USDC on Base or Solana) or MPP (USDC on Base).",
   image: `${PUBLIC_ORIGIN}/og.jpg`,
   services: [
     { name: 'web', endpoint: `${PUBLIC_ORIGIN}/` },
