@@ -194,7 +194,8 @@ if (x402PayTo) {
     // MPP discovery for MPPScan: public/openapi.json plus the evm offer per paid operation.
     const spec = addMppOffers(JSON.parse(require('fs').readFileSync(path.join(__dirname, 'public', 'openapi.json'), 'utf8')), {
       categories: ['security', 'blockchain'],
-      docs: { homepage: 'https://plaintext.fizzl.eu', apiReference: 'https://plaintext.fizzl.eu/openapi.json', llms: 'https://plaintext.fizzl.eu/skill.md' }
+      docs: { homepage: 'https://plaintext.fizzl.eu', apiReference: 'https://plaintext.fizzl.eu/openapi.json', llms: 'https://plaintext.fizzl.eu/skill.md' },
+      contact: { name: 'Fizzl', url: 'https://fizzl.eu' }
     });
     app.get('/openapi.json', (_req, res) => res.json(spec));
   }
