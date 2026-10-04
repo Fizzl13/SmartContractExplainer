@@ -186,7 +186,9 @@ if (x402PayTo) {
       realm: 'plaintext.fizzl.eu',
       recipient: x402PayTo,
       routes: { 'POST /api/check-wallet': x402CheckPrice, 'POST /api/explain': x402ExplainPrice },
-      facilitator: facilitators[0]
+      facilitator: facilitators[0],
+      // MPP_TEMPO_RECIPIENT adds the tempo method (USDC.e on Tempo, push mode; MPP_TEMPO_CHAIN 42431 = testnet).
+      tempo: process.env.MPP_TEMPO_RECIPIENT ? { recipient: process.env.MPP_TEMPO_RECIPIENT, chainId: Number(process.env.MPP_TEMPO_CHAIN || 4217), rpc: process.env.MPP_TEMPO_RPC || undefined } : null
     })
     : null;
   if (mpp) {
@@ -195,7 +197,8 @@ if (x402PayTo) {
     const spec = addMppOffers(JSON.parse(require('fs').readFileSync(path.join(__dirname, 'public', 'openapi.json'), 'utf8')), {
       categories: ['security', 'blockchain'],
       docs: { homepage: 'https://plaintext.fizzl.eu', apiReference: 'https://plaintext.fizzl.eu/openapi.json', llms: 'https://plaintext.fizzl.eu/skill.md' },
-      contact: { name: 'Fizzl', url: 'https://fizzl.eu' }
+      contact: { name: 'Fizzl', url: 'https://fizzl.eu' },
+      tempo: mpp.tempo
     });
     app.get('/openapi.json', (_req, res) => res.json(spec));
   }
