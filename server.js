@@ -675,7 +675,8 @@ app.get('/.well-known/agent-registration.json', (req, res) => res.json({
   ],
   active: true,
   x402Support: true,
-  registrations: [],
+  // ERC-8004 Identity Registry on Base (registered 4 Oct 2026; tokenURI = this file)
+  registrations: [{ agentId: 97523, agentRegistry: 'eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432' }],
   supportedTrust: []
 }));
 
