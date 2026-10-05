@@ -214,7 +214,7 @@ if (x402PayTo) {
     },
     'POST /api/explain': {
       accepts: acceptsFor(x402ExplainPrice),
-      description: 'Explain a pasted approval/permission payload in plain language, with a SAFE, CAUTION or RISK verdict',
+      description: 'What would signing this allow? Paste a wallet approval, transaction or typed-data signature before someone signs it: returns a SAFE, CAUTION or RISK verdict with a short plain-language explanation of what it gives away',
       mimeType: 'application/json',
       ...serviceMetadata,
       extensions: explainDiscovery
@@ -675,7 +675,7 @@ const X402_WELL_KNOWN_MANIFEST = {
   description: "Checks a wallet's token/NFT approvals via GoPlus and explains risk in plain language.",
   endpoints: [
     { url: `${PUBLIC_ORIGIN}/api/check-wallet`, method: 'POST', description: 'Explain wallet token approvals in plain language' },
-    { url: `${PUBLIC_ORIGIN}/api/explain`, method: 'POST', description: 'Explain a pasted approval payload in plain language' }
+    { url: `${PUBLIC_ORIGIN}/api/explain`, method: 'POST', description: 'What would signing this allow? A SAFE, CAUTION or RISK verdict with a plain-language explanation of a pasted approval, transaction or signature' }
   ],
   openapi: `${PUBLIC_ORIGIN}/openapi.json`,
   docs: `${PUBLIC_ORIGIN}/openapi.json`,
