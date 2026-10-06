@@ -146,6 +146,9 @@
   .video h2 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter-spacing: -.03em; font-size: 22px; margin: 0 0 12px; }
   .video video { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); background: #000; }
   footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 12.5px; line-height: 1.6; }
+  .prices { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+  .prices .pill { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 9px 13px; font-size: 14px; color: var(--ink-soft); }
+  .prices .pill b { color: var(--accent); font-weight: 600; }
 </style>
 <style>.by-fizzl{margin:28px 0 0;font-size:12.5px;line-height:1}.by-fizzl a{display:inline-flex;align-items:center;gap:6px;color:inherit;opacity:.75;text-decoration:none}.by-fizzl a:hover,.by-fizzl a:focus-visible{opacity:1}.by-fizzl svg{height:20px;width:auto;display:block}.by-fizzl .b{fill:#61f5c3}</style>
 </head>
@@ -156,6 +159,11 @@
     <div class="eyebrow">plaintext-wallet · self-hosted</div>
     <h1>Before you sign,<br>know what you're signing.</h1>
     <p>Check a real wallet's approvals, or try a sample scenario — either way, get a plain-language explanation of what each permission actually does.</p>
+    <div class="prices" aria-label="Prices">
+      <span class="pill"><b>3 free</b> checks a day</span>
+      <span class="pill"><b>$0.03</b> explain a signature</span>
+      <span class="pill"><b>$0.04</b> wallet check</span>
+    </div>
   </header>
 
   <p class="moved"><strong>For agents and developers:</strong> the verdicts come from <a href="https://presign-guard.fizzl.eu">presign-guard</a> (the same checks and a signed receipt); PlainText adds the explanation in plain language. If you only need the verdict and reason codes, call presign-guard directly: <code>GET /v1/approvals?chain=base&amp;address=…</code> ($0.02) or <code>POST /v1/check</code> ($0.01).</p>
