@@ -3,6 +3,8 @@ const express = require('express');
 const path = require('path');
 const { paymentMiddleware } = require('@x402/express');
 const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
+const { ExactXrplScheme } = require('@x402/xrpl/exact/server');
+const { createXrplFacilitator, XRPL } = require('./xrpl-facilitator');
 const { ExactEvmScheme } = require('@x402/evm/exact/server');
 const { ExactSvmScheme } = require('@x402/svm/exact/server');
 const { createFacilitatorConfig } = require('@coinbase/x402');
@@ -104,9 +106,16 @@ if (x402PayTo) {
   if (usingCdp) facilitators.push(new HTTPFacilitatorClient(createFacilitatorConfig(process.env.CDP_API_KEY_ID, process.env.CDP_API_KEY_SECRET)));
   facilitators.push(new HTTPFacilitatorClient({ url: x402FacilitatorUrl }));
 
+  // RLUSD on the XRP Ledger (mainnet only), the same dollar price: XRPL_PAY_TO, else Frits's account (it has the
+  // RLUSD trust line); XRPL_PAY_TO=off turns it off. Verified and submitted in this process (xrpl-facilitator.js).
+  const xrplPayTo = x402Caip2Network !== CAIP2_NETWORKS.base || process.env.XRPL_PAY_TO === 'off' ? null
+    : (process.env.XRPL_PAY_TO || '').trim() || 'r9xmBsRr8Ao7jRgjjxreMiAwGiCK2FGwqw';
+  if (xrplPayTo) facilitators.push(createXrplFacilitator({ wsUrl: process.env.XRPL_WS_URL || 'wss://xrplcluster.com' }));
+
   const x402Server = new x402ResourceServer(facilitators);
   x402Server.register('eip155:*', new ExactEvmScheme());
   if (x402PayToSolana) x402Server.register(x402SolanaNetwork, new ExactSvmScheme());
+  if (xrplPayTo) x402Server.register(XRPL, new ExactXrplScheme());
 
   // Diagnostic logging only — doesn't change behavior. The 402 response a client
   // sees on verify/settle failure carries no detail, so log the real reason here.
@@ -175,7 +184,8 @@ if (x402PayTo) {
   });
   const acceptsFor = (price) => [
     { scheme: 'exact', price, network: x402Caip2Network, payTo: x402PayTo },
-    ...(x402PayToSolana ? [{ scheme: 'exact', price, network: x402SolanaNetwork, payTo: x402PayToSolana }] : [])
+    ...(x402PayToSolana ? [{ scheme: 'exact', price, network: x402SolanaNetwork, payTo: x402PayToSolana }] : []),
+    ...(xrplPayTo ? [{ scheme: 'exact', price, network: XRPL, payTo: xrplPayTo, extra: { invoiceId: 'plaintext.fizzl.eu' } }] : [])
   ];
 
   // MPP (mpp-pay.js): the same Base USDC payment for agents that speak MPP, through the
