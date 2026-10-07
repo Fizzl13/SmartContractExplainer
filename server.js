@@ -4,7 +4,7 @@ const path = require('path');
 const { paymentMiddleware } = require('@x402/express');
 const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
 const { ExactXrplScheme } = require('@x402/xrpl/exact/server');
-const { createXrplFacilitator, XRPL } = require('./xrpl-facilitator');
+const { createXrplFacilitator, XRPL, X402_SOURCE_TAG } = require('./xrpl-facilitator');
 const { ExactEvmScheme } = require('@x402/evm/exact/server');
 const { ExactSvmScheme } = require('@x402/svm/exact/server');
 const { createFacilitatorConfig } = require('@coinbase/x402');
@@ -185,7 +185,7 @@ if (x402PayTo) {
   const acceptsFor = (price) => [
     { scheme: 'exact', price, network: x402Caip2Network, payTo: x402PayTo },
     ...(x402PayToSolana ? [{ scheme: 'exact', price, network: x402SolanaNetwork, payTo: x402PayToSolana }] : []),
-    ...(xrplPayTo ? [{ scheme: 'exact', price, network: XRPL, payTo: xrplPayTo, extra: { invoiceId: 'plaintext.fizzl.eu' } }] : [])
+    ...(xrplPayTo ? [{ scheme: 'exact', price, network: XRPL, payTo: xrplPayTo, extra: { invoiceId: 'plaintext.fizzl.eu', sourceTag: X402_SOURCE_TAG } }] : [])
   ];
 
   // MPP (mpp-pay.js): the same Base USDC payment for agents that speak MPP, through the
