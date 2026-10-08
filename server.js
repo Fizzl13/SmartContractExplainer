@@ -4,6 +4,7 @@ const path = require('path');
 const { paymentMiddleware } = require('@x402/express');
 const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
 const { ExactXrplScheme } = require('@x402/xrpl/exact/server');
+const { ExactAvmScheme } = require('@x402/avm/exact/server');
 const { createXrplFacilitator, XRPL, X402_SOURCE_TAG } = require('./xrpl-facilitator');
 const { ExactEvmScheme } = require('@x402/evm/exact/server');
 const { ExactSvmScheme } = require('@x402/svm/exact/server');
@@ -79,6 +80,7 @@ function mirrorChallengeIntoBody(req, res, next) {
   next();
 }
 
+const ALGORAND = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=';
 const x402PayTo = process.env.X402_PAY_TO;
 if (x402PayTo) {
   const x402Network = process.env.X402_NETWORK || 'base-sepolia';
@@ -104,6 +106,23 @@ if (x402PayTo) {
   const usingCdp = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
   const facilitators = [];
   if (usingCdp) facilitators.push(new HTTPFacilitatorClient(createFacilitatorConfig(process.env.CDP_API_KEY_ID, process.env.CDP_API_KEY_SECRET)));
+
+  // USDC on Algorand (ASA 31566704), the same dollar price, settled by GoPlausible's public facilitator (it also pays
+  // the Algorand fee). Mainnet only, and only with ALGORAND_PAY_TO: an Algorand account with the USDC opt-in; "off"
+  // turns it off. Put before the URL facilitator, offering only Algorand, so that one never claims Algorand.
+  const algorandPayTo = x402Caip2Network !== CAIP2_NETWORKS.base || !(process.env.ALGORAND_PAY_TO || '').trim() || process.env.ALGORAND_PAY_TO.trim() === 'off' ? null
+    : process.env.ALGORAND_PAY_TO.trim();
+  if (algorandPayTo) {
+    const goplausible = new HTTPFacilitatorClient({ url: process.env.ALGORAND_FACILITATOR_URL || 'https://facilitator.goplausible.xyz' });
+    facilitators.push({
+      verify: (...args) => goplausible.verify(...args),
+      settle: (...args) => goplausible.settle(...args),
+      async getSupported() {
+        const supported = await goplausible.getSupported();
+        return { ...supported, kinds: supported.kinds.filter((k) => String(k.network).startsWith('algorand:')) };
+      }
+    });
+  }
   facilitators.push(new HTTPFacilitatorClient({ url: x402FacilitatorUrl }));
 
   // RLUSD on the XRP Ledger (mainnet only), the same dollar price: XRPL_PAY_TO, else Frits's account (it has the
@@ -116,6 +135,7 @@ if (x402PayTo) {
   x402Server.register('eip155:*', new ExactEvmScheme());
   if (x402PayToSolana) x402Server.register(x402SolanaNetwork, new ExactSvmScheme());
   if (xrplPayTo) x402Server.register(XRPL, new ExactXrplScheme());
+  if (algorandPayTo) x402Server.register(ALGORAND, new ExactAvmScheme());
 
   // Diagnostic logging only — doesn't change behavior. The 402 response a client
   // sees on verify/settle failure carries no detail, so log the real reason here.
@@ -185,7 +205,8 @@ if (x402PayTo) {
   const acceptsFor = (price) => [
     { scheme: 'exact', price, network: x402Caip2Network, payTo: x402PayTo },
     ...(x402PayToSolana ? [{ scheme: 'exact', price, network: x402SolanaNetwork, payTo: x402PayToSolana }] : []),
-    ...(xrplPayTo ? [{ scheme: 'exact', price, network: XRPL, payTo: xrplPayTo, extra: { invoiceId: 'plaintext.fizzl.eu', sourceTag: X402_SOURCE_TAG } }] : [])
+    ...(xrplPayTo ? [{ scheme: 'exact', price, network: XRPL, payTo: xrplPayTo, extra: { invoiceId: 'plaintext.fizzl.eu', sourceTag: X402_SOURCE_TAG } }] : []),
+    ...(algorandPayTo ? [{ scheme: 'exact', price, network: ALGORAND, payTo: algorandPayTo }] : [])
   ];
 
   // MPP (mpp-pay.js): the same Base USDC payment for agents that speak MPP, through the
@@ -231,7 +252,7 @@ if (x402PayTo) {
     }
   }, x402Server))));
 
-  const networks = [x402Caip2Network, ...(x402PayToSolana ? [x402SolanaNetwork] : [])].join(' + ');
+  const networks = [x402Caip2Network, ...(x402PayToSolana ? [x402SolanaNetwork] : []), ...(xrplPayTo ? [XRPL] : []), ...(algorandPayTo ? [ALGORAND] : [])].join(' + ');
   console.log(`x402 paywall enabled for /api/check-wallet and /api/explain on ${networks} using facilitator ${usingCdp ? `Coinbase CDP (fallback ${x402FacilitatorUrl})` : x402FacilitatorUrl}${mpp ? ', MPP on' : ''}`);
 } else {
   console.log('x402 paywall disabled: set X402_PAY_TO in your environment to enable it.');
