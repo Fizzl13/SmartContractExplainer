@@ -36,7 +36,10 @@ async function acceptsWith(env) {
     for (let i = 0; i < 50; i++) {
       try {
         const res = await fetch(`http://127.0.0.1:${port}/api/check-wallet`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-        if (res.status === 402) return JSON.parse(Buffer.from(res.headers.get('payment-required'), 'base64').toString()).accepts;
+        if (res.status === 402) {
+          const challenge = JSON.parse(Buffer.from(res.headers.get('payment-required'), 'base64').toString());
+          return Object.assign(challenge.accepts, { extensions: challenge.extensions });
+        }
       } catch { /* not up yet */ }
       await new Promise((r) => setTimeout(r, 200));
     }
@@ -57,6 +60,9 @@ test('with ALGORAND_PAY_TO: $0.04 in USDC (ASA 31566704) on Algorand, with the A
   assert.equal(algo.amount, '40000');
   assert.equal(algo.extra.feePayer, FEE_PAYER, 'not the URL facilitator\'s');
   assert.ok(accepts.some((a) => a.network === 'eip155:8453'), 'Base still offered');
+  // GoPlausible names the seller (one merchant per Algorand pay-to) from this.
+  assert.equal(accepts.extensions['x402-merchant'].info.name, 'Fizzl');
+  assert.equal(accepts.extensions['x402-merchant'].info.logo, 'https://fizzl.eu/logo-512.png');
 });
 
 test('without ALGORAND_PAY_TO, or "off": no Algorand', async () => {
