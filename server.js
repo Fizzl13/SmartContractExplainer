@@ -11,6 +11,7 @@ const { ExactSvmScheme } = require('@x402/svm/exact/server');
 const { createFacilitatorConfig } = require('@coinbase/x402');
 const { fizzlCors } = require('./fizzl-cors');
 const { declareDiscoveryExtension } = require('@x402/extensions/bazaar');
+const { merchantExtension } = require('./merchant');
 const { McpServer, createMcpHandler } = require('@modelcontextprotocol/server');
 const { z } = require('zod/v4');
 const { createMediaCache } = require('./media');
@@ -241,14 +242,14 @@ if (x402PayTo) {
       description: "Check an EVM wallet's live token/NFT approvals and get a plain-language verdict (SAFE, CAUTION or RISK) with an explanation",
       mimeType: 'application/json',
       ...serviceMetadata,
-      extensions: checkWalletDiscovery
+      extensions: { ...checkWalletDiscovery, ...merchantExtension }
     },
     'POST /api/explain': {
       accepts: acceptsFor(x402ExplainPrice),
       description: 'What would signing this allow? Paste a wallet approval, transaction or typed-data signature before someone signs it: returns a SAFE, CAUTION or RISK verdict with a short plain-language explanation of what it gives away',
       mimeType: 'application/json',
       ...serviceMetadata,
-      extensions: explainDiscovery
+      extensions: { ...explainDiscovery, ...merchantExtension }
     }
   }, x402Server))));
 
