@@ -590,6 +590,17 @@ app.post('/api/demo-explain', async (req, res) => {
 // --- Free MCP tools, rate-limited (see /api/check-wallet and /api/explain
 // above for the paid HTTP equivalents) ---
 
+// What both tools answer: the verdict and the explanation, as text ("VERDICT: explanation", which the usage log
+// reads) and as structuredContent matching this schema. Extra fields are allowed, so new ones never break a call.
+const VERDICT_OUTPUT = z.object({
+  verdict: z.string().describe('SAFE, CAUTION or RISK'),
+  explanation: z.string().describe('Plain-language explanation of what the approval or payload allows')
+}).passthrough();
+const verdictResult = ({ verdict, explanation }) => ({
+  content: [{ type: 'text', text: `${verdict}: ${explanation}` }],
+  structuredContent: { verdict, explanation }
+});
+
 function buildMcpServer() {
   const server = new McpServer({ name: 'plaintext-wallet-checker', version: '1.0.0' });
 
@@ -602,12 +613,12 @@ function buildMcpServer() {
         address: z.string().regex(ADDRESS_RE).describe('EVM wallet address to check, e.g. 0x...'),
         chain: z.enum(Object.keys(CHAINS)).optional().describe('Chain to check approvals on (default: ethereum)'),
         kind: z.enum(['token', 'nft']).optional().describe('Approval type to check (default: token)')
-      })
+      }),
+      outputSchema: VERDICT_OUTPUT
     },
     async ({ address, chain, kind }) => {
       try {
-        const result = await getWalletVerdict({ address, chain, kind });
-        return { content: [{ type: 'text', text: `${result.verdict}: ${result.explanation}` }] };
+        return verdictResult(await getWalletVerdict({ address, chain, kind }));
       } catch (err) {
         return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
       }
@@ -621,7 +632,8 @@ function buildMcpServer() {
       description: "Explain an arbitrary approval/permission JSON payload in plain language, when you already have the data instead of needing an on-chain lookup.",
       inputSchema: z.object({
         data: z.record(z.string(), z.any()).describe('Arbitrary approval/permission JSON payload to explain')
-      })
+      }),
+      outputSchema: VERDICT_OUTPUT
     },
     async ({ data }) => {
       try {
@@ -629,8 +641,7 @@ function buildMcpServer() {
         if (size > MAX_EXPLAIN_PAYLOAD_CHARS) {
           return { content: [{ type: 'text', text: `Error: payload too large (${size} chars, max ${MAX_EXPLAIN_PAYLOAD_CHARS}).` }], isError: true };
         }
-        const { verdict, explanation } = await explainPayload(data);
-        return { content: [{ type: 'text', text: `${verdict}: ${explanation}` }] };
+        return verdictResult(await explainPayload(data));
       } catch (err) {
         return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
       }
@@ -642,7 +653,8 @@ function buildMcpServer() {
     {
       title: feedback.mcpTool.title,
       description: feedback.mcpTool.description,
-      inputSchema: z.object(feedback.mcpShape(z))
+      inputSchema: z.object(feedback.mcpShape(z)),
+      ...(feedback.mcpOutputShape ? { outputSchema: feedback.mcpOutputShape(z) } : {})
     },
     async (args) => feedback.mcpCall(args, mcpCaller.getStore() || {})
   );
