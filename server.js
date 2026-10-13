@@ -31,6 +31,18 @@ const PORT = process.env.PORT || 3000;
 // req.ip is Render's address for everyone, too many (true) and the caller can
 // pick their own req.ip with an X-Forwarded-For header.
 app.set('trust proxy', trustProxyHops());
+app.disable('x-powered-by');
+
+// Security headers on every answer (browsers ignore HSTS over plain http, so local runs are unaffected).
+app.use((_req, res, next) => {
+  res.set({
+    'strict-transport-security': 'max-age=31536000',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'x-frame-options': 'SAMEORIGIN',
+  });
+  next();
+});
 
 app.use(express.json());
 
