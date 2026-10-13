@@ -22,6 +22,7 @@ const { describePlainTextCall } = require('./usage');
 const { trustProxyHops } = require('./proxy');
 const { onPublicHost } = require('./public-host');
 const { createMppPay, unlessMppPaid, addMppOffers } = require('./mpp-pay');
+const { wellKnown } = require('./well-known');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -706,26 +707,7 @@ app.all('/mcp', async (req, res) => {
 // x402scan and similar indexers read {version: 1, resources: [url, ...]};
 // methods, prices and schemas come from /openapi.json (x-payment-info).
 const PUBLIC_ORIGIN = 'https://plaintext.fizzl.eu';
-const X402_WELL_KNOWN_MANIFEST = {
-  version: 1,
-  resources: [`${PUBLIC_ORIGIN}/api/check-wallet`, `${PUBLIC_ORIGIN}/api/explain`],
-  x402Version: 2,
-  kind: 'resource-server',
-  name: 'PlainText — wallet approval translator',
-  serviceName: 'PlainText',
-  category: 'security',
-  iconUrl: `${PUBLIC_ORIGIN}/icon.png`,
-  tags: ['wallet-security', 'approvals', 'crypto', 'explainer'],
-  description: "Checks a wallet's token/NFT approvals via GoPlus and explains risk in plain language.",
-  endpoints: [
-    { url: `${PUBLIC_ORIGIN}/api/check-wallet`, method: 'POST', description: 'Explain wallet token approvals in plain language' },
-    { url: `${PUBLIC_ORIGIN}/api/explain`, method: 'POST', description: 'What would signing this allow? A SAFE, CAUTION or RISK verdict with a plain-language explanation of a pasted approval, transaction or signature' }
-  ],
-  openapi: `${PUBLIC_ORIGIN}/openapi.json`,
-  docs: `${PUBLIC_ORIGIN}/openapi.json`,
-  contact: 'Fizzl13@protonmail.com',
-  updated: '2026-09-23T00:00:00Z'
-};
+const X402_WELL_KNOWN_MANIFEST = wellKnown(PUBLIC_ORIGIN);
 
 // Instructions an AI agent can read and follow ("Connect to plaintext.fizzl.eu/skill.md").
 app.get('/skill.md', (_req, res) => res.set('cache-control', 'public, max-age=300').type('text/markdown; charset=utf-8').sendFile(path.join(__dirname, 'public', 'skill.md')));
