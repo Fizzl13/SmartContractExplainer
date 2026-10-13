@@ -39,7 +39,7 @@ async function logged(handler, request) {
   app.use(log.middleware(describePlainTextCall));
   app.all('*', handler);
   const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
-  await fetch(`http://127.0.0.1:${server.address().port}${request.path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': request.agent || 'node' }, body: JSON.stringify(request.body || {}) });
+  await fetch(`http://127.0.0.1:${server.address().port}${request.path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': request.agent || 'node', ...request.headers }, body: JSON.stringify(request.body || {}) });
   await new Promise((r) => setTimeout(r, 30));
   await log.flush();
   server.close();
@@ -53,6 +53,12 @@ test('usage log: a 402 is logged as a price shown, with the caller and a visitor
   assert.equal(e.agent, 'CarbonMonitor/0.1');
   assert.match(e.visitor, /^[0-9a-f]{12}$/);
   assert.ok(!JSON.stringify(e).includes('127.0.0.1'));
+});
+
+test('usage log: a refused x402 payment is logged with the reason the 402 gives', async () => {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64');
+  const e = await logged((_req, res) => res.set('PAYMENT-REQUIRED', b64({ x402Version: 2, error: 'insufficient_funds', accepts: [] })).status(402).json({}), { path: '/api/check-wallet', headers: { 'payment-signature': b64({ x402Version: 2 }) } });
+  assert.deepEqual([e.status, e.payment_failed, e.reason], [402, true, 'insufficient_funds']);
 });
 
 test('usage log: an MCP reply sent as an event stream is read (the verdict is logged)', async () => {
