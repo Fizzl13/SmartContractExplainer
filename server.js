@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const { paymentMiddleware } = require('@x402/express');
 const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
+const { createFacilitatorStart } = require('./facilitator-start');
 const { ExactXrplScheme } = require('@x402/xrpl/exact/server');
 const { ExactAvmScheme } = require('@x402/avm/exact/server');
 const { createXrplFacilitator, XRPL, X402_SOURCE_TAG } = require('./xrpl-facilitator');
@@ -145,11 +146,14 @@ if (x402PayTo) {
     : (process.env.XRPL_PAY_TO || '').trim() || 'r9xmBsRr8Ao7jRgjjxreMiAwGiCK2FGwqw';
   if (xrplPayTo) facilitators.push(createXrplFacilitator({ wsUrl: process.env.XRPL_WS_URL || 'wss://xrplcluster.com' }));
 
-  const x402Server = new x402ResourceServer(facilitators);
+  // Supported kinds fetched without x402's start-up exit (facilitator-start.js).
+  const facilitatorStart = createFacilitatorStart(facilitators, { retryMs: Number(process.env.FACILITATOR_RETRY_MS) || undefined });
+  const x402Server = new x402ResourceServer(facilitatorStart.clients);
   x402Server.register('eip155:*', new ExactEvmScheme());
   if (x402PayToSolana) x402Server.register(x402SolanaNetwork, new ExactSvmScheme());
   if (xrplPayTo) x402Server.register(XRPL, new ExactXrplScheme());
   if (algorandPayTo) x402Server.register(ALGORAND, new ExactAvmScheme());
+  facilitatorStart.attach(x402Server, [x402Caip2Network, ...(x402PayToSolana ? [x402SolanaNetwork] : []), ...(xrplPayTo ? [XRPL] : []), ...(algorandPayTo ? [ALGORAND] : [])]);
 
   // Diagnostic logging only — doesn't change behavior. The 402 response a client
   // sees on verify/settle failure carries no detail, so log the real reason here.
@@ -264,7 +268,7 @@ if (x402PayTo) {
       ...serviceMetadata,
       extensions: { ...explainDiscovery, ...merchantExtension }
     }
-  }, x402Server))));
+  }, x402Server, undefined, undefined, false /* no start-up exit: facilitator-start.js fetches the kinds */))));
 
   const networks = [x402Caip2Network, ...(x402PayToSolana ? [x402SolanaNetwork] : []), ...(xrplPayTo ? [XRPL] : []), ...(algorandPayTo ? [ALGORAND] : [])].join(' + ');
   console.log(`x402 paywall enabled for /api/check-wallet and /api/explain on ${networks} using facilitator ${usingCdp ? `Coinbase CDP (fallback ${x402FacilitatorUrl})` : x402FacilitatorUrl}${mpp ? ', MPP on' : ''}`);
