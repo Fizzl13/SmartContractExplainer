@@ -95,3 +95,32 @@ test('usage log: writes are batched (one read and one write for several calls), 
   assert.equal(file.slice(old.length).trim().split('\n').length, 2);
   assert.deepEqual(calls, [`GET /repos/Fizzl13/usage-log/contents/${path}`, `PUT /repos/Fizzl13/usage-log/contents/${path}`]);
 });
+
+test('usage log: the next write to the same day file skips the read; a file changed elsewhere is read again', async () => {
+  const crypto = require('node:crypto');
+  const { createUsageLog } = require('../usage-log');
+  const shaOf = (text) => { const b = Buffer.from(text); return crypto.createHash('sha1').update(`blob ${b.length}\0`).update(b).digest('hex'); };
+  let file = null;
+  const calls = [];
+  // Like GitHub: a write must name the sha of the file it replaces.
+  const fetchFn = async (url, opts = {}) => {
+    const method = opts.method || 'GET';
+    calls.push(method);
+    if (method === 'GET') return file === null ? new Response('{}', { status: 404 }) : new Response(file);
+    const body = JSON.parse(opts.body);
+    if (file !== null && body.sha !== shaOf(file)) return new Response('{}', { status: 409 });
+    file = Buffer.from(body.content, 'base64').toString('utf8');
+    return Response.json({}, { status: 201 });
+  };
+  const log = createUsageLog({ service: 'plaintext', env: { USAGE_LOG_TOKEN: 't' }, fetchFn, now: () => new Date('2026-10-14T10:00:00Z'), log: { warn() {}, error() {} } });
+  log.record({ route: 'check-wallet', status: 402 });
+  await log.flush();
+  log.record({ route: 'explain', status: 200 });
+  await log.flush();
+  assert.deepEqual(calls, ['GET', 'PUT', 'PUT'], 'one read, then writes only');
+  file += '{"t":"2026-10-14T10:00:01.000Z","service":"plaintext","route":"other"}\n'; // another writer appended
+  log.record({ route: 'explain', status: 402 });
+  await log.flush();
+  assert.deepEqual(calls.slice(3), ['PUT', 'GET', 'PUT']);
+  assert.deepEqual(file.trim().split('\n').map((l) => JSON.parse(l).route), ['check-wallet', 'explain', 'other', 'explain'], 'no line lost');
+});
