@@ -71,3 +71,27 @@ test('usage log: an MCP reply sent as an event stream is read (the verdict is lo
   assert.equal(e.route, 'check_wallet_approvals');
   assert.deepEqual(e.result, { verdict: 'RISK' });
 });
+
+test('usage log: writes are batched (one read and one write for several calls), and a day file over 1 MB keeps its lines', async () => {
+  const { createUsageLog } = require('../usage-log');
+  const path = 'events/plaintext/2026-10-14.jsonl';
+  const old = `${'x'.repeat(1100 * 1024)}\n`;
+  let file = old;
+  const calls = [];
+  const fetchFn = async (url, opts = {}) => {
+    const method = opts.method || 'GET';
+    calls.push(`${method} ${new URL(url).pathname}`);
+    // Like GitHub: the JSON form has no content for files over 1 MB, the raw form has the bytes.
+    if (method === 'GET') return /raw/.test(opts.headers?.accept || '') ? new Response(file) : Response.json({ sha: 'x', content: '' });
+    file = Buffer.from(JSON.parse(opts.body).content, 'base64').toString('utf8');
+    return Response.json({}, { status: 200 });
+  };
+  const log = createUsageLog({ service: 'plaintext', env: { USAGE_LOG_TOKEN: 't' }, fetchFn, now: () => new Date('2026-10-14T10:00:00Z'), log: { warn() {}, error() {} } });
+  log.record({ route: 'check-wallet', status: 402 });
+  log.record({ route: 'explain', status: 200 });
+  assert.equal(calls.length, 0, 'nothing written until the flush');
+  await log.flush();
+  assert.ok(file.startsWith(old), 'the old lines are still there');
+  assert.equal(file.slice(old.length).trim().split('\n').length, 2);
+  assert.deepEqual(calls, [`GET /repos/Fizzl13/usage-log/contents/${path}`, `PUT /repos/Fizzl13/usage-log/contents/${path}`]);
+});
