@@ -95,7 +95,8 @@ function mirrorChallengeIntoBody(req, res, next) {
   next();
 }
 
-const ALGORAND = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=';
+// Algorand mainnet by its CAIP-2 id (the first 32 characters of the genesis hash): @x402/avm 2.29.0 accepts only that form.
+const ALGORAND = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k';
 const x402PayTo = process.env.X402_PAY_TO;
 if (x402PayTo) {
   const x402Network = process.env.X402_NETWORK || 'base-sepolia';

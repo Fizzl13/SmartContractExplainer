@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { usdOf } = require('../usage-log');
 
-const ALGORAND = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=';
+const ALGORAND = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k';
 const PAY_TO = 'SGLTUPAC7TKGKNNXKNPQ2QZCC7NJSLAKYZ7O7NOGGAPXWBFZTOLTPMSPPI';
 const FEE_PAYER = 'ZMFK2OI7ZBD2U27ISERZC4S6LKM6WMFJPZQ4MYNJDZ2VNBNMBA67RA22AA';
 
