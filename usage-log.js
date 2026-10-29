@@ -51,6 +51,7 @@ const NETWORK_NAMES = {
   'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1': 'solana-devnet',
   'eip155:4217': 'Tempo',
   'xrpl:0': 'xrpl',
+  'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k': 'algorand',
   'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=': 'algorand',
   'xrpl:1': 'xrpl-testnet',
 };
